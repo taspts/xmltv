@@ -1,0 +1,280 @@
+#!/usr/bin/perl -w
+
+eval 'exec /usr/bin/perl -w -S $0 ${1+"$@"}'
+    if 0; # not running under some shell
+
+=pod
+
+=head1 NAME
+
+tv_grab_il - Grab TV listings for Israel.
+
+=head1 SYNOPSIS
+
+tv_grab_il --help
+  
+tv_grab_il --version
+
+tv_grab_il --capabilities
+
+tv_grab_il --description
+
+
+tv_grab_il [--config-file FILE]
+           [--days N] [--offset N]
+           [--output FILE] [--quiet] [--debug]
+
+tv_grab_il --configure [--config-file FILE]
+
+tv_grab_il --configure-api [--stage NAME]
+           [--config-file FILE]
+           [--output FILE]
+
+tv_grab_il --list-channels [--config-file FILE]
+           [--output FILE] [--quiet] [--debug]
+
+=head1 DESCRIPTION
+
+Output TV listings in XMLTV format for many channels available in Israel.
+The data comes from tv.walla.co.il.
+
+First you must run B<tv_grab_il --configure> to choose which channels
+you want to receive.
+
+Then running B<tv_grab_il> with no arguments will get a listings in XML
+format for the channels you chose for available days including today.
+
+=head1 OPTIONS
+
+B<--configure> Prompt for which channels to download and write the
+configuration file.
+
+B<--config-file FILE> Set the name of the configuration file, the
+default is B<~/.xmltv/tv_grab_il.conf>.  This is the file written by
+B<--configure> and read when grabbing.
+
+B<--output FILE> When grabbing, write output to FILE rather than
+standard output.
+
+B<--days N> When grabbing, grab N days rather than all available days.
+
+B<--offset N> Start grabbing at today + N days.  N may be negative.
+
+B<--quiet> Suppress the progress-bar normally shown on standard error.
+
+B<--debug> Provide more information on progress to stderr to help in
+debugging.
+
+B<--list-channels> Write output giving <channel> elements for every
+channel available (ignoring the config file), but no programmes.
+
+B<--capabilities> Show which capabilities the grabber supports. For more
+information, see L<http://wiki.xmltv.org/index.php/XmltvCapabilities>
+
+B<--version> Show the version of the grabber.
+
+B<--help> Print a help message and exit.
+
+=head1 ERROR HANDLING
+
+If the grabber fails to download data for some channel on a specific day, 
+it will print an errormessage to STDERR and then continue with the other
+channels and days. The grabber will exit with a status code of 1 to indicate 
+that the data is incomplete. 
+
+=head1 ENVIRONMENT VARIABLES
+
+The environment variable HOME can be set to change where configuration
+files are stored. All configuration is stored in $HOME/.xmltv/. On Windows,
+it might be necessary to set HOME to a path without spaces in it.
+
+=head1 SUPPORTED CHANNELS
+
+For information on supported channels, see http://tv.walla.co.il/
+
+=head1 AUTHOR
+
+lightpriest. This documentation and parts of the code
+based on various other tv_grabbers from the XMLTV-project.
+
+=head1 SEE ALSO
+
+L<xmltv(5)>.
+
+=cut
+
+use strict;
+use Encode;
+use XMLTV::Options qw/ParseOptions/;
+use XMLTV::ProgressBar;
+use XMLTV::Configure::Writer;
+use XMLTV::Get_nice qw(get_nice_tree);
+
+use POSIX qw(strftime);
+use DateTime;
+
+# Use XMLTV::Options::ParseOptions to parse the options and take care of the basic capabilities that a tv_grabber should
+my ($opt, $conf) = ParseOptions({ 
+  grabber_name => "tv_grab_il",
+  capabilities => [qw/baseline manualconfig apiconfig/],
+  stage_sub => \&config_stage,
+  listchannels_sub => \&fetch_channels,
+  version => '$Id: tv_grab_il,v 1.24 2010/11/14 05:54:51 rmeden Exp $',
+  description => "Israel (tv.walla.co.il)"
+});
+
+sub config_stage {
+  my ($stage, $conf) = @_;
+
+  die "Unknown stage $stage" unless $stage eq "start";
+
+  my $result;
+  my $writer = new XMLTV::Configure::Writer(OUTPUT => \$result, encoding => 'utf-8');
+  $writer->start({'generator-info-name' => 'tv_grab_il'});
+  $writer->end('select-channels');
+  return $result;
+}
+
+sub fetch_channels {
+  my ($opt, $conf) = @_;
+
+  my $result;
+  my $channels = {};
+
+  my $bar = new XMLTV::ProgressBar({
+    name => "Fetching channels",
+    count => 1
+  }) unless ($opt->{quiet} || $opt->{debug});
+
+  # Get the page containing the list of channels 
+  my $tree = XMLTV::Get_nice::get_nice_tree('http://tv.walla.co.il/?w=/4');
+  my @channels = $tree->look_down("_tag", "a",
+    "href", qr/\?w=\/[0-9]\/\/[0-9]*\/\/[0-9-]*\/1/,
+    sub { !$_[0]->look_down('_tag', 'img') }
+  );
+
+  $bar->update() && $bar->finish && undef $bar if defined $bar;
+
+  $bar = new XMLTV::ProgressBar({
+    name => "Parsing result",
+    count => scalar @channels
+  }) unless ($opt->{quiet} || $opt->{debug});
+
+  # Browse through the downloaded list of channels and map them to a hash XMLTV::Writer would understand
+  foreach my $channel (@channels) {
+    if ($channel->as_text()) {
+      my ($id) = $channel->attr('href') =~ /\?w=\/[0-9]\/\/([0-9]*)\/\/[0-9-]*\/1/;
+
+      # Try to fetch the icon
+      my $icon = $channel->parent();
+      $icon = $icon->right if $icon;
+      $icon = $icon->look_down('_tag', 'a', 'href', qr/\?w=\/[0-9]\/\/[0-9]*\/\/[0-9-]*\/1/) if $icon;
+      $icon = $icon->look_down('_tag', 'img') if $icon;
+      $icon = $icon->attr('src') if $icon;
+
+      $channels->{"$id.tv.walla.co.il"} = {
+        id => "$id.tv.walla.co.il",
+        'display-name' => [[ encode( 'utf-8', decode( 'windows-1255', $channel->as_text())), 'he' ]],
+        url => [ $channel->attr('href') ]
+      };
+      $channels->{"$id.tv.walla.co.il"}->{icon} = [ {src => ($icon || '')} ] if ($icon)
+
+    }
+
+    $bar->update() if defined $bar;
+  }
+
+  $bar->finish() && undef $bar if defined $bar;
+
+  # Notifying the user :)
+  $bar = new XMLTV::ProgressBar({
+    name => "Reformatting",
+    count => 1
+  }) unless ($opt->{quiet} || $opt->{debug});
+
+  # Let XMLTV::Writer format the results as a valid xmltv file
+  my $writer = new XMLTV::Writer(OUTPUT => \$result, encoding => 'utf-8');
+  $writer->start({'generator-info-name' => 'tv_grab_il'});
+  $writer->write_channels($channels);
+  $writer->end();
+
+  $bar->update() && $bar->finish() if defined $bar;
+
+  return $result;
+}
+
+# Fetch the channels again to see what's available
+my $data = XMLTV::parse(&fetch_channels($opt, $conf));
+my ($encoding, $credits, $channels, $programmes) = @{$data};
+
+# Create a new hash for the channels so that channels without programmes won't appear in the final XML
+my $w_channels = {};
+
+# Progress Bar :)
+my $bar = new XMLTV::ProgressBar({
+  name => "Fetching channels listings",
+  count => (scalar @{$conf->{channel}}) * $opt->{days}
+}) unless ($opt->{quiet} || $opt->{debug});
+
+# Fetch listings per channel
+foreach my $channel_id (@{$conf->{channel}}) {
+
+  # Check each channel still exists in walla's channels page
+  if ($channels->{$channel_id}) {
+    my ($walla_id) = ($channel_id =~ /^([0-9]*)\..*$/);
+    
+    # Now grab listings for each channel on each day, according to the options in $opt
+    for (my $i=$opt->{offset}; $i < ($opt->{offset} + $opt->{days}); $i++) {
+      my $theday = DateTime->today()->add (days => $i)->set_time_zone('Asia/Jerusalem');
+      my $url = "http://tv.walla.co.il/?w=/4//$walla_id//" . $theday->ymd() . "/1";
+
+      my $tree = XMLTV::Get_nice::get_nice_tree($url);
+
+      if ($tree) {
+        my @shows = $tree->look_down('_tag', 'table', 'width', '100%', 'dir', 'ltr', 'cellpadding', '2', 'border', '0');
+        if (@shows) {
+          foreach my $show (@shows) {
+            my $title = $show->look_down('_tag', 'a', 'class', 'w3b');
+            my $show_hour_element = $show->look_down('_tag', 'span', 'class', 'w3b txt-w');
+            
+            my @show_hour = split(/:/, $show_hour_element->as_text());
+            my $show_time = $theday->clone();
+            if ($show_hour[0] < 6) {
+              $show_time->add (days => 1);
+            }
+            $show_time->set(hour => $show_hour[0], minute => $show_hour[1], second => 0);
+
+            push @{$programmes}, {
+              start => $show_time->strftime("%Y%m%d%H%M%S %z"),
+              title => [[ encode( 'utf-8', decode( 'windows-1255', $title->as_text())), 'he']],
+              channel => $channel_id
+            };
+          }
+
+          # Add this channel to the finalized XML
+          $w_channels->{$channel_id} = $channels->{$channel_id} unless $w_channels->{$channel_id};
+
+        } else {
+        }
+      } else {
+      }
+
+      $bar->update if defined $bar;
+    }
+  }
+}
+
+$bar->finish() && undef $bar if defined $bar;
+
+my %w_args;
+
+if (($opt->{offset} != 0) || ($opt->{days} != -999)) {
+  $w_args{offset} = $opt->{offset};
+  $w_args{days} = ($opt->{days} == -999) ? 100 : $opt->{days};
+  $w_args{cutoff} = '060000';
+}
+
+$data->[2] = $w_channels;
+$data->[3] = $programmes;
+
+XMLTV::write_data($data, %w_args);

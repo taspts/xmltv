@@ -1,0 +1,8 @@
+Makefile
+blib
+pm_to_blib
+t_*_cache
+t_*.diff
+t_*.log
+t_*.xml
+*.cache

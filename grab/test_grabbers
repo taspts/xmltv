@@ -1,0 +1,154 @@
+#!/usr/bin/perl
+#
+# Run each of the grabbers in turn and do some checks on the output.
+# This is a tool for xmltv developers to run only occasionally -
+# because it does network fetches it can't be part of 'make test'!
+# Run it giving the root of the xmltv source tree, after 'make'.
+# It needs a test.conf file in each grabber directory.
+#
+# -- Ed Avis, ed@membled.com, 2005-08-20
+#
+use warnings;
+use strict;
+use Getopt::Long;
+use File::chdir;
+use FindBin qw($Bin);
+use lib "$Bin/../blib/lib";
+    
+use XMLTV::ValidateFile qw/LoadDtd/;
+use XMLTV::ValidateGrabber qw/ValidateGrabber ConfigureGrabber/;
+
+sub w;
+
+our $opt_configure;     # try to --configure grabbers if necessary
+our $opt_only;          # run just one grabber
+our $opt_list_channels; # run with --list-channels
+our $opt_help=0;
+our $root = "$Bin/..";
+
+$ENV{XMLTV_SUPPLEMENT} = "$root/blib/share";
+
+# Store the status of each grabber to print a summary at the end.
+my %status;
+my %untested;
+my @grabbers; 
+
+my $result = GetOptions('configure' => \$opt_configure,
+			'only=s' => \$opt_only,
+			'list-channels' => \$opt_list_channels,
+			'xmltv-root=s' => \$root,
+			'help|h' => \$opt_help,
+			);
+
+if (scalar( @ARGV ) != 0 or not $result or $opt_help) {
+    print << "EOH";
+usage: $0 [options]
+    
+Valid options:
+--only <grabber>  Only test the specified grabber.
+--configure       Configure all/the selected grabber(s).
+--list-channels   Test that the --list-channels option is supported.
+--xmltv-root dir  Root directory for the xmltv distribution. Only necessary
+                  if test_grabbers is moved outside of the xmltv distribution
+                  directory.
+--help            Print this text.
+
+EOH
+
+   exit 1;
+}
+
+die "--list-channels not implemented" if $opt_list_channels;
+
+my $dtd_in_root = "$root/xmltv.dtd";
+if (not -e $dtd_in_root) {
+    print "$dtd_in_root does not exist.\n";
+    print "Failed to find the xmltv distribution directory. Please use the\n";
+    print "--xmltv-root parameter to specify it.\n";
+    exit 1;
+}
+
+LoadDtd( $dtd_in_root );
+
+{
+    local $CWD = "$root/grab";
+    if (defined $opt_only) {
+	die "no such grabber $opt_only\n" if not -d $opt_only;
+	@grabbers = ($opt_only);
+    }
+    else {
+	@grabbers = grep { -d } <[a-z]*>;
+    }
+}
+
+process_grabbers();
+
+my $summary_file = 't_summary.log';
+open(SUMMARY, ">$summary_file")
+  or die "cannot open $summary_file for writing: $!";
+
+sub print_summary {
+    my $msg = shift;
+    print SUMMARY $msg or die "cannot write to $summary_file: $!";
+    print $msg or die "cannot write to stdout: $!";
+}
+
+print_summary "\nTested:\n-------\n";
+foreach my $grabber (sort keys %status) {
+    print_summary "$grabber\t$status{$grabber}\n";
+}
+
+print "\nNot tested:\n-----------\n";
+foreach my $grabber (sort keys %untested) {
+    print_summary "$grabber\t$untested{$grabber}\n";
+}
+
+print_summary "\n";
+close SUMMARY or die "cannot close t_summary.log: $!";
+
+sub w {
+    print "$_[0]\n";
+}
+
+sub process_grabbers {
+  while( my $grabber = shift @grabbers ) {
+    $grabber =~ /^[a-z_]+$/ or die "bad grabber name $_";
+    my $exe = "tv_grab_$grabber";
+    my $cmd = "perl -I $root/blib/lib $root/blib/script/$exe";
+    my $conf = "$root/grab/$grabber/test.conf";
+    my $output_prefix = "t_${grabber}_";
+
+    if ( not -f "$root/blib/script/$exe" ) {
+#	w "No such grabber $exe.";
+        $untested{$exe} = "no exe";
+	goto done;
+    }
+
+    if( $opt_configure ) {
+      w "Configuring $exe";
+      ConfigureGrabber( $cmd, $conf );
+    }
+
+    if( not -f $conf ) {
+#      w "$exe not configured. Skipping.";
+      $untested{$exe} = "no test.conf";
+      goto done;
+    }
+
+    w "Testing $exe";
+
+    my @errors = ValidateGrabber( $exe,  $cmd, $conf, $output_prefix, 
+				  "$root/blib/share/", 1 );
+
+    if (scalar( @errors )) {
+        $status{$exe} = join ", ", @errors;
+	w "$exe has errors: @errors";
+    }
+    else {
+        $status{$exe} = "ok";
+    }
+
+  done:
+  }
+}
+

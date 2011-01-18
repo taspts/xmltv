@@ -1,0 +1,285 @@
+#!/usr/bin/perl -w
+#
+# $Id: mkdist,v 1.54 2009/08/10 06:29:13 rmeden Exp $
+#
+# This script is meant to be run in an empty directory, although
+# it doesn't require it.
+#
+# This script checks out the latest head revision (by checking it out
+# from scratch), checks version information in files, ignores
+# files/dirs we don't want to release, tags the source files in cvs,
+# generates a ChangeLog and generates the .tar.bz2 file for release.
+# Then it uploads this file to upload.sourceforge.net.
+#
+# It DOES NOT: add the file to the XMLTV project, or email
+# announcements, or update www pages, although it reminds you to do
+# so :)
+#
+# -- jerry@matilda.com
+#
+
+use strict;
+use File::Temp qw(tempdir);
+use Getopt::Long;
+use Date::Manip;
+
+#$SIG{__WARN__} = sub { die $_[0] };
+
+my $debug;
+
+my $cvs_host = 'xmltv.cvs.sourceforge.net';
+my $tmp_checkout_dir = tempdir;
+
+sub Usage()
+{
+    print "mkdist --version <id> [options]\n";
+    print "where options are:\n";
+    print "    --version <id>   - creating version <id> (eg 0.1.2)\n";
+    print "    --sfuser <login> - sourceforge login with cvs access\n";
+    print "                       defaults to first xmltv login in ~/.cvspass\n";
+    print "    --help           - this usage message\n";
+    print "    --debug          - print debug messages as we go\n";
+    print "    --login          - perform cvs login to refresh/verify cvs access\n";
+    print "    --step           - step by step confirmation of commands\n";
+}
+
+our ($opt_help, $opt_debug, $opt_sfuser, $opt_login, $opt_version, $opt_step);
+
+if ( ! GetOptions('help', 'debug', 'sfuser=s', 'login', 'version=s', 'step') ) {
+    Usage();
+    exit(1);
+}
+
+if ( defined($opt_help) ) {
+    Usage();
+    exit(0);
+}
+
+$debug=1 if ( defined($opt_debug) );
+
+# Mimic Perl's system() in allowing either a single argument
+# or a list of parameters (which means don't use the shell).
+#
+sub do_system(@)
+{
+    if ($opt_step) {
+	print "@_ [yN]? ";
+	my $reply = <STDIN>;
+	return if $reply !~ /^[yY]/;
+    }
+
+    print "@_\n";
+    my $rc=system(@_);
+    if ( $rc != 0 ) {
+	die "command failed: $rc";
+    }
+}
+
+if ( !defined($opt_version) ) {
+   print STDERR "missing required argument --version, use --help for details\n";
+   exit(1);
+}
+if ( !defined($opt_sfuser) ) {
+   if ( open(FD, "< $ENV{HOME}/.cvspass") ) {
+	while (<FD>) {
+	   if ( m/^:pserver:([^\@]+)\@$cvs_host:/o ) {
+	      $opt_sfuser=$1;
+	      print "assuming --sfuser $1 from first xmltv entry in ~/.cvspass\n";
+	      last;
+	   }
+        }
+	close(FD);
+        if ( !defined($opt_sfuser) ) {
+	   print STDERR "failed to locate any appropriate entry in ~/.cvspass\n";
+	}
+   }
+   else {
+ 	print STDERR "failed to locate any appropriate entry in ~/.cvspass\n";
+   }
+   if ( !defined($opt_sfuser) ) {
+      print STDERR "missing required argument --sfuser, use --help for details\n";
+      exit(1);
+   }
+}
+
+print "Did you update the README and README.win32 files with release information?\n";
+print "hit return to continue with mkdist, or ^C to stop here.";
+my $junk=<>; # read return
+
+print "opt_version=\"$opt_version\"\n" if ( $debug );
+
+#if ( !($opt_version=~m/^\d+\.\d+$/o) && !($opt_version=~m/^\d+\.\d+\.\d+$/o) ) {
+#    print STDERR "invalid version id, specify something of the form \"[0-9].[0-9]\" or \"[0-9].[0-9].[0-9]\"\n";;
+#    exit(1);
+#}
+
+my $cvs_tag="V$opt_version";
+$cvs_tag=~s/\./_/og;
+
+print "version tag to use is: $cvs_tag\n" if ( $opt_debug );
+
+# always use ssh for cvs access
+$ENV{CVS_RSH}="ssh";
+
+if ( defined($opt_login) ) {
+    # use pserver to login.  FIXME Does Sourceforge support
+    # authenticated pserver?  I thought it was anonymous only.
+    #
+    $ENV{CVSROOT}=":pserver:$opt_sfuser\@$cvs_host:/cvsroot/xmltv";
+    do_system("cvs login");
+}
+
+print "\nChecking out current head revision in $tmp_checkout_dir/xmltv ..\n";
+chdir $tmp_checkout_dir or die "could not chdir to $tmp_checkout_dir: $!";
+$ENV{CVS_RSH} = 'ssh';
+$ENV{CVSROOT} = ":ext:$opt_sfuser\@$cvs_host:/cvsroot/xmltv";
+do_system("cvs -z7 -q co -P xmltv");
+
+# Filename, and a regexp to capture the version in $1.
+my %check_ver = ('README'                 => q{^XMLTV\s+([^, ]+)},
+		 'doc/README.win32'       => q{^XMLTV\s+([^, ]+)},
+		 'Makefile.PL'            => q{^(?:(?:our|my) )?\$VERSION\s*=\s*'(\S+)';},
+		 'lib/XMLTV.pm.in'        => q{^(?:(?:our|my) )?\$VERSION\s*=\s*'(\S+)';},
+		 'lib/exe_wrap.pl'        => q{^(?:(?:our|my) )?\$VERSION\s*=\s*'(\S+)';},
+		);
+foreach my $f (keys %check_ver) {
+    my $re = $check_ver{$f};
+    $f = "$tmp_checkout_dir/xmltv/$f";
+    open(FD, $f) || die "cannot open $f: $!";
+    my $got;
+    while (<FD>) {
+	chomp;
+	if (/$re/) {
+	    $got = $1; die if not defined $got;
+	    if ($got ne $opt_version) {
+		# I think it's better not to do anything clever, but
+		# just let the user update the file.  -- epa
+		die "$f:$.:found version $got, not $opt_version\n";
+	    }
+	    else { last }
+	}
+    }
+    if (not defined $got) {
+	die "could not find version number in $f\n";
+    }
+    close FD or die "cannot close $f: $!";
+    print "Version number in $f is correct.\n";
+}
+
+# Another check on README - that the date is correct.
+my $readme_f = "$tmp_checkout_dir/xmltv/README";
+open(FD, $readme_f) or die "cannot open $readme_f: $!";
+my $found = 0;
+while (<FD>) {
+    if (/^-- .+ (\d{4}-\d\d-\d\d)/) {
+	$found = 1;
+	my $date = UnixDate(ParseDate($1), '%Y-%m-%d');
+	die "bad date $1 in README" if not $date;
+	my $today = UnixDate(ParseDate('now'), '%Y-%m-%d');
+	die if not $today;
+	die "date in README ($date) is not today ($today),\n"
+	  . "  update the signature with date and your name\n"
+	  if $date ne $today;
+    }
+}
+die "no signature found in README" if not $found;
+close FD or die "cannot close $readme_f: $!";
+
+print "\nremoving old tag $cvs_tag just in case\n";
+do_system("cvs -z3 -q tag -d \"$cvs_tag\"");
+
+my @toremove=grep { -e "$tmp_checkout_dir/$_"
+		      || (warn("$_ missing, but no matter\n"), 0) }
+  map { "xmltv/$_" }
+  qw(attic
+     leon
+     cgi
+     todo
+     MANIFEST.SKIP
+     mkdist
+     ChangeLog.old);
+
+my $cmd="tar cf save.tar ";
+for my $f (@toremove) { $cmd.="$f "; }
+
+$cmd.="`find xmltv -name CVS -type d`";
+$cmd.=" `find xmltv -name .cvsignore -type f`";
+
+print "\ntemporarily removing files/dirs not for release..\n";
+do_system($cmd);
+
+# take easy route :)
+do_system('rm', '-rf', map { "$tmp_checkout_dir/$_" } @toremove);
+
+print "\ngenerating ChangeLog..\n";
+do_system("cd xmltv && cvs2cl --utc");
+
+print "\ntagging release with $cvs_tag..\n";
+do_system("cd xmltv && cvs -z3 -q tag \"$cvs_tag\"");
+
+print "\nremoving CVS dirs..\n";
+do_system("find xmltv -name CVS -type d -prune -exec rm -rf {} \\;");
+
+print "\nrenaming xmltv directory to xmltv-$opt_version..\n";
+rename("xmltv", "xmltv-$opt_version");
+
+# The tarball we generate and upload.
+my $filename = "xmltv-$opt_version.tar.bz2";
+print "\n";
+# 'tar --bzip2' appends useless junk to the compressed data.
+do_system("tar c ./xmltv-$opt_version | bzip2 >$filename");
+print "\n";
+
+# FIXME do we need this if working in a separate checkout dir?
+print "\nrestoring files that won't be released..\n";
+rename("xmltv-$opt_version", "xmltv");
+unlink("xmltv/ChangeLog");
+do_system("tar xpf save.tar");
+unlink("save.tar");
+
+print "\nuploading $filename to frs.sourceforge.net..\n";
+print "scp $filename  $opt_sfuser,xmltv\@frs.sourceforge.net:/home/frs/project/x/xm/xmltv/xmltv/$opt_version/\n";
+do_system("scp $filename  $opt_sfuser,xmltv\@frs.sourceforge.net:/home/frs/project/x/xm/xmltv/xmltv/$opt_version/");
+
+print <<END
+**** File $filename uploaded to upload.sourceforge.net
+
+To register this file as part of the release:
+  - Go to
+< https://sourceforge.net/project/admin/explorer.php?group_id=39046 >
+    (login may be required)
+  - change folder to xmltv/$opt_version
+    click on  files to select appropriate attributes
+
+  Step 1
+  ------
+  - change status to "Hidden" (for now)
+    In the release page, paste the README in as 'release notes', apart
+    from the 'changes in this release' section of the README, which
+    goes in the 'changelog' box, 
+    NOTE: check the 'Preserve my pre-formatted text. ' box
+    then click 'Submit/Refresh'
+    <page refreshes>
+
+  Step 2
+  ------
+  - choose $filename, then click
+    'Add Files and/or Refresh View' button
+    <page refreshes>
+
+  Step 3
+  ------
+  - set the platform 'Any' and type 'Source bz2'
+  - hit 'update' button
+
+  - Toggle 'Status' in Step 1 to 'Active' and hit 'Submit/Refresh' button
+    at the bottom of Step 1.
+    < how hit 'Summary' button at top of page, you should see release
+      show up >
+
+Now update the XMLTV wiki.
+
+Send a release announcement to xmltv-announce\@lists.sourceforge.net,
+and update the Freshmeat entry <http://freshmeat.net/projects/xmltv/?topic_id=868>.
+END
+  ;

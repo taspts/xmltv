@@ -1,0 +1,593 @@
+#!/usr/bin/perl -w
+
+=pod
+
+=head1 NAME
+
+tv_grab_eu_epgdata - Grab TV listings for parts of Europe.
+
+=head1 SYNOPSIS
+
+tv_grab_eu_epgdata --help
+tv_grab_eu_epgdata
+tv_grab_eu_epgdata --version
+
+tv_grab_eu_epgdata --capabilities
+
+tv_grab_eu_epgdata --description
+
+
+tv_grab_eu_epgdata [--config-file FILE]
+                   [--days N] [--offset N]
+                   [--output FILE] [--quiet] [--debug]
+
+tv_grab_eu_epgdata --configure [--config-file FILE]
+
+tv_grab_eu_epgdata --configure-api [--stage NAME]
+                   [--config-file FILE]
+                   [--output FILE]
+
+tv_grab_eu_epgdata --list-channels [--config-file FILE]
+                   [--output FILE] [--quiet] [--debug]
+
+tv_grab_eu_epgdata --preferredmethod
+
+=head1 DESCRIPTION
+
+Output TV and listings in XMLTV format for many stations
+available in Europe.
+
+First you must run B<tv_grab_eu_epgdata --configure> to choose which stations
+you want to receive.
+
+Then running B<tv_grab_eu_epgdata> with no arguments will get a listings for
+the stations you chose for five days including today.
+
+This is a commercial grabber. 
+Go to http://wiki.xmltv.org/index.php/EU_epgdata to sign up or
+send an e-mail to service@epgdata.com for further information.
+It's also possible to ask for a test account.
+
+=head1 OPTIONS
+
+B<--configure> Prompt for which stations to download and write the
+configuration file.
+
+B<--config-file FILE> Set the name of the configuration file, the
+default is B<~/.xmltv/tv_grab_eu_epgdata.conf>.  This is the file written by
+B<--configure> and read when grabbing.
+
+B<--gui OPTION> Use this option to enable a graphical interface to be used.
+OPTION may be 'Tk', or left blank for the best available choice.
+Additional allowed values of OPTION are 'Term' for normal terminal output
+(default) and 'TermNoProgressBar' to disable the use of Term::ProgressBar.
+
+B<--output FILE> When grabbing, write output to FILE rather than
+standard output.
+
+B<--days N> When grabbing, grab N days rather than 5.
+
+B<--offset N> Start grabbing at today + N days.
+
+B<--quiet> Do not show status messages.
+
+B<--debug> Provide more information on progress to stderr to help in
+debugging.
+
+B<--list-channels>    Output a list of all channels that data is available
+                      for. The list is in xmltv-format.
+
+B<--version> Show the version of the grabber.
+
+B<--help> Print a help message and exit.
+
+B<--preferredmethod> Shows the preferred method for downloading data
+                     (see http://wiki.xmltv.org/index.php/XmltvCapabilities)
+=head1 ENVIRONMENT VARIABLES
+
+The environment variable HOME can be set to change where configuration
+files are stored. All configuration is stored in $HOME/.xmltv/. On Windows,
+it might be necessary to set HOME to a path without spaces in it.
+
+=head1 SUPPORTED CHANNELS
+
+For a list of supported channels, see the channel_ids file distributed with this grabber. 
+If additional channels are available, you will receive a warning when you run --configure.
+
+Once I am aware that new channels are available, the channel_ids file will be updated and
+this grabber will automatically fetch an updated copy.
+
+=head1 COMPATIBILITY
+
+The channel ids used in this grabber aim to be mostly possible with other grabbers, eg 
+tv_grab_de_prisma and some other grabbers for other countries. 
+NOTE: Retaining compatibility was not always possible or practicable. 
+You can get a list of channel ids using --list-channels
+
+=head1 AUTHOR
+
+Michael Haas, laga -at- laga -dot- ath -dot - cx. This documentation is copied
+from tv_grab_se_swedb by Mattias Holmlund, which in turn was copied from tv_grab_uk by Ed Avis.
+Parts of the code are copied from tv_grab_se_swedb and tv_grab_na_dd (in XMLTV 0.5.45) as well
+as various other sources.
+
+=head1 BUGS
+
+There's no proper support for channels with locally different schedules. For example,
+if your EPG package is a German one, you'll get the EPG schedule for Germany
+even if you preferred the Swiss schedule which is also available in the data (for some channels at least).
+
+Timezones are not handled correctly. Currently, you have to enter your 
+time zone manually during the configure step. You have to do this every 
+time your time zone changes, eg for daylight saving time 
+("Sommerzeit" and "Normalzeit" for my fellow Germans).
+I'll try to have this fixed for the next XMLTV release.
+Please see this thread for further discussion and some additional issues:
+    http://thread.gmane.org/gmane.comp.tv.xmltv.devel/7919
+FYI: you can modify the time zone directly in the config file which is
+usually located at ~/.xmltv/tv_grab_eu_epgdata.conf or 
+~/.mythtv/FOO.xmltv where FOO is the name of your video source in MythTV.
+
+If the data source gives us data for one day, they'll also cover a part of the following day.
+Maybe this should be fixed. Please note: data is not overlapping! So if we want to get data for
+today, we might as well grab yesterday because that'll give us EPG till ~5am for today.
+
+I'm sure this list is not complete. Let me know if you encounter additional problems.
+
+=cut
+
+
+use strict;
+use warnings;
+use LWP::Simple qw($ua getstore);
+use Archive::Zip;
+use File::Temp qw/ tempdir /;
+use XML::Twig;
+
+use XMLTV;
+use XMLTV::Options qw/ParseOptions/;
+use XMLTV::Configure::Writer;
+use XMLTV::Supplement qw/GetSupplement/;
+use HTTP::Request::Common;
+
+# deal with umlauts
+use HTML::Entities;
+
+# to parse expiry and start/stop dates
+use Date::Format;
+use DateTime::Format::Strptime;
+
+use XMLTV::Memoize; XMLTV::Memoize::check_argv('getstore');
+
+# set user agent
+$ua->agent("xmltv/$XMLTV::VERSION");
+
+#our $tmp= tempdir( CLEANUP => 1 ) . '/';
+our $tmp= tempdir() . '/';
+# set up XML::Twig
+our $epg= new XML::Twig( twig_handlers => { data => \&printepg } );
+our $channels = new XML::Twig( twig_handlers => { data => \&printchannels } );
+our %genre;
+our $genre = new XML::Twig( twig_handlers => { data => \&makegenrehash } );
+
+# build a hash: epgdata.com channel id -> xmltv channel id
+my $chanids = GetSupplement( 'tv_grab_eu_epgdata', 'channel_ids' );
+
+our $channelgroup;
+our $expiry_date;
+
+our %chanid;
+my @lines = split( /[\n\r]+/, $chanids );
+foreach my $line (@lines) {
+    if ($line !~ '^#') {
+        my @chanid_array = split(';', $line);
+        chomp($chanid_array[1]);
+        $chanid{$chanid_array[0]}= $chanid_array[1] unless $line =~ '^#';
+    }
+}
+
+my( $opt, $conf ) = ParseOptions( { 
+    grabber_name => "tv_grab_eu_epgdata",
+    capabilities => [qw/baseline manualconfig tkconfig apiconfig cache preferredmethod/],
+    stage_sub => \&config_stage,
+    listchannels_sub => \&list_channels,
+    version => '$Id: tv_grab_eu_epgdata,v 1.31 2010/09/04 10:28:44 dekarl Exp $',
+    description => "Parts of Europe (commercial) (www.epgdata.com)",
+    preferredmethod => "allatonce",
+} );
+
+my $pin = $conf->{pin}->[0];
+die 'Sorry, your PIN is not defined. Run tv_grab_eu_epgdata --configure to fix this.\n' unless $pin;
+
+our $tz = $conf->{tz}->[0];
+if (not $tz) {
+    $tz = 'local';
+}
+my $start_stop_parser =
+    DateTime::Format::Strptime->new( pattern => '%Y-%m-%d %H:%M:%S',
+                                     time_zone => $tz );
+
+sub config_stage {
+    # shamelessly stolen from http://wiki.xmltv.org/index.php/HowtoWriteAGrabber
+
+    my( $stage, $conf ) = @_;
+    # Sample stage_sub that only needs a single stage.
+    die "Unknown stage $stage" if $stage ne "start";
+
+    my $result;
+    my $configwriter = new XMLTV::Configure::Writer( OUTPUT => \$result,
+                                                     encoding => 'ISO-8859-1' );
+    $configwriter->start( { grabber => 'tv_grab_eu_epgdata' } );
+    $configwriter->write_string( {
+	id => 'pin', 
+        title => [ [ 'Enter your PIN for epgdata.com', 'en' ] ],
+        description => [ 
+        [ 'This alphanumeric string is used for authentication with epgdata.com. 
+        Go to http://wiki.xmltv.org/index.php/EU_epgdata to sign up or 
+        send an e-mail to service@epgdata.com for further information',
+            'en' ] ],
+        default => '',
+    } );
+    $configwriter->write_string( {
+        id => 'tz', 
+        title => [ [ 'Time zone for your EPG data', 'en' ] ],
+        description => [ 
+        [ 'Enter your time zone or the time offset from UTC here. 
+        Examples: "local" (your local system timezone), "Europe/Berlin", "+0100". (without quotation marks)',
+            'en' ] ],
+        default => 'local',
+    } );
+
+    $configwriter->end( 'select-channels' );
+    return $result;
+}
+
+
+
+# construct writer object
+# taken from tv_grab_na_dd (XMLTV 0.4.45)
+# XMLTV::Options does not redirect stdout properly for us
+# XML::Twig probably messes it up, I don't know. :/
+my %w_args;
+if (defined $opt->{output}) {
+                            my $fh = new IO::File(">$opt->{output}");
+                            die "ERROR: cannot write to $opt->{output}: $!" if not defined $fh;
+                            $w_args{OUTPUT} = $fh;
+}
+$w_args{encoding} = 'ISO-8859-1';
+
+our $writer = new XMLTV::Writer(%w_args);
+
+
+our @xmlfiles = downloadepg($opt->{days},$opt->{offset},$pin);
+prepareinclude($conf,$opt);
+# it looks like we can also extract the language from the file 
+# name of the epg data
+processxml(@xmlfiles);
+
+sub sanitize {
+	my $input = shift;
+	# we only want to keep alphanumeric characters
+	$input =~ s/[^a-zA-Z0-9_\-\.]//gi;
+	return $input;
+}
+
+sub downloadepg {
+    my $days = shift;
+    my $offset = shift;
+    my $pin = shift;
+    my $i='0';
+    my @filenames;
+    # we've got to start counting at 0
+    # if we did "$i <= $days", we'd end up with one zip file too much
+    while ( $i < $days) {    
+    	my $dataoffset = $i +$offset;
+	my $baseurl="http://www.epgdata.com";
+	my $url=$baseurl . '/index.php?action=sendPackage&iOEM=&pin=' . $pin . '&dayOffset=' . $dataoffset . '&dataType=xml';
+        # get file name from content-disposition header
+    	warn "url=", $url, "\n" if $opt->{debug};
+    	my $response = $ua->request(GET $url);
+        if ($response->{"_headers"}{"x-epgdata-packageavailable"} == 1) {
+            my $filename = sanitize($response->{"_headers"}{"content-disposition"});
+            $expiry_date = $response->{"_headers"}{"x-epgdata-timeout"};
+            $channelgroup = sanitize($response->{"_headers"}{"x-epgdata-channelgroup"});
+            $filename =~  s/^.*=//;
+
+            warn "filename=", $filename, "\n" if $opt->{debug};
+            warn "Downloading zip file for day ", $dataoffset + 1, "\n" unless $opt->{quiet};
+            open(F,">$tmp" . $filename);
+            binmode(F);
+            print F $response->content;
+            close(F);
+            push @filenames, $tmp . $filename;
+        }
+        else {
+            warn "No more zip files available for download\n" unless $opt->{quiet};
+            return unzip(@filenames);
+        }
+	$i++;
+    }
+    return unzip(@filenames);
+}
+
+# for simplicity's sake, always call with $conf as argument at least
+sub prepareinclude {
+    my ( $conf, $opt ) = @_;
+    my $baseurl="http://www.epgdata.com";
+    my $pin = $conf->{pin}->[0];
+    my $includeurl=$baseurl . "/index.php?action=sendInclude&iOEM=&pin=" . $pin
+        . "&dataType=xml";
+    warn "Downloading include zip file\n" unless $opt->{quiet};
+    getstore($includeurl, $tmp . "includezip");
+    warn "Your PIN will expire around ",  time2str("%C", $expiry_date),"\n" unless $opt->{quiet};
+    my @zipfiles=( $tmp . "includezip");
+    unzip(@zipfiles)
+}
+
+# returns list of *.xml files
+sub unzip {
+    my @xmlfilelist;
+    foreach my $zipfile (@_) {
+        warn "Extracting *.dtd and *.xml from ", $zipfile, "\n" if $opt->{debug};
+        my $zip = Archive::Zip->new( $zipfile );
+        my @filelist = $zip->memberNames;
+        foreach my $filename (@filelist) {
+            # we only care about .dtd and .xml right now
+            my $isdtd = 1 if $filename =~ /\.dtd/;
+            my $isxml = 1 if $filename =~ /\.xml/;
+            $zip->extractMember( $filename, $tmp . sanitize($filename) ) if ($isdtd or $isxml);
+            push @xmlfilelist, ( $tmp . sanitize($filename)) if $isxml;
+        }
+    }
+    return @xmlfilelist;
+}
+
+
+sub processxml {
+    $writer->start({ 'generator-info-name' => 'tv_grab_eu_epgdata' });
+    $genre->parsefile($tmp . 'genre.xml');
+    $channels->parsefile($tmp . 'channel_' . sanitize($channelgroup) . '.xml');
+    foreach my $xmlfile (@_) {
+        warn "Processing ". $xmlfile, "\n" if $opt->{debug};
+	$epg->parsefile($xmlfile);
+    }
+    $writer->end();
+}
+
+
+sub makegenrehash {
+    my( $twig, $genre)= @_;
+    my $genreid = $genre->first_child('g0')->text;
+    my $genrename = decode_entities($genre->first_child('g1')->text);
+    $genre{$genreid}= $genrename;
+    $twig->purge;
+}
+
+sub format_start_stop {
+    my( $ts ) = @_;
+    my $dt =  $start_stop_parser->parse_datetime( $ts );
+    return $dt->strftime("%Y%m%d%H%M%S %z");
+}
+
+sub printepg {
+    my( $twig, $sendung)= @_;
+    my $internalchanid = $sendung->first_child('d2')->text;
+    my $internalregionid = $sendung->first_child('d3')->text;
+    our $chanid;
+    if (defined $main::chanid{$internalchanid}) {
+        $chanid = $main::chanid{$internalchanid};
+    }
+    else {
+        $chanid = $internalchanid;
+    # FIXME: not sure if this is correct. 
+    # Maybe we should behave differently if we encounter an unknown ID, 
+    # but this ought to be OK for now
+    }
+    # alright, let's try this:
+    # push the channel ids we want to grab in an array
+    # http://effectiveperl.blogspot.com/
+    my %configuredchannels = map { $_, 1 } @{$conf->{channel}};
+    # does the channel we're currently processing exist in the hash?
+    # BTW: this is not a lot more efficient in our case than looping over a list
+    # but a few seconds are better than nothing :)
+    if($configuredchannels{$chanid} && $internalregionid == '0') {
+            my $title = decode_entities($sendung->first_child('d19')->text);
+            my $subtitle = decode_entities($sendung->first_child('d20')->text);
+            my $desc = decode_entities($sendung->first_child('d23')->text);
+            my $start = $sendung->first_child('d4')->text;
+            my $stop = $sendung->first_child('d5')->text;
+            my $category = $sendung->first_child('d10')->text;
+            my $internalgenreid = $sendung->first_child('d25')->text;
+            my $age_rating = $sendung->first_child('d16')->text;
+            my $star_rating = $sendung->first_child('d30')->text;
+            my $wide_aspect = $sendung->first_child('d29')->text;
+            my $sequence = $sendung->first_child('d26')->text;
+            my $production_year = decode_entities($sendung->first_child('d33')->text);
+
+            # people
+            my $presenter = decode_entities($sendung->first_child('d34')->text);
+            my $studio_guest = decode_entities($sendung->first_child('d35')->text);
+            my $director = decode_entities($sendung->first_child('d36')->text);
+            my $actor = decode_entities($sendung->first_child('d37')->text);
+
+            
+            # black and white?
+            my $bw_colour = $sendung->first_child('d11')->text;
+            my $stereo_audio = $sendung->first_child('d27')->text;
+            my $dolby_audio = $sendung->first_child('d28')->text;
+            # I was told that technics_hd is supposed to exist
+            # However, it's not listed in qy.dtd
+            # my $hd_video = $sendung->first_child('XXX')->text;
+
+            our %prog = ("channel" => $chanid, 
+                         "start" => format_start_stop( $start ),
+                         "stop" => format_start_stop( $stop ), 
+                         "title" => [ [ $title ] ]);
+
+             if ( length($subtitle) > 0 ) {
+                push @{$prog{'sub-title'}}, [$subtitle];
+            }
+            
+            # use hardcoded categories for mythtv
+            if ($category eq "100") {
+                push @{$prog{'category'}}, ["movie"];
+            } 
+            elsif ($category eq "200") {
+                push @{$prog{'category'}}, ["series"];
+            } 
+            elsif ($category eq "300") {
+                push @{$prog{'category'}}, ["sports"];
+            } 
+            elsif ($category eq "400") {
+                push @{$prog{'category'}}, ["tvshow"];
+            }
+	    
+            if (exists $genre{$internalgenreid} ) {
+                push @{$prog{'category'}}, [$genre{$internalgenreid}];
+            }
+            
+            if (length($desc) > 0 ) {
+                push @{$prog{'desc'}}, [$desc];
+            }
+
+            # people
+            if ( length($actor)>0 ) {
+                $actor =~ s/\s\(.*\)//g;                    # chop the rolenames
+                my @actors = split / - /, $actor;           # split people
+                foreach (@actors) { s/^\s+// ; s/\s+$//}    # strip blanks
+                    push @{$prog{'credits'}{'actor'}}, @actors;
+            }
+
+            if ( length($director)>0 ) {
+                my @directors = split / und | & /, $director;
+                push @{$prog{'credits'}{'director'}}, @directors;
+            }
+
+            if ( length($studio_guest)>0) {
+                $studio_guest =~ s/\s\(.*\)//g;             # chop the rolenames
+                my @guests = split / - /, $studio_guest;    # split people
+                foreach (@guests) { s/^\s+// ; s/\s+$//}    # strip blanks
+                    push @{$prog{'credits'}{'guest'}}, @guests;
+            }
+
+            if ( length($presenter)>0) {
+                push @{$prog{'credits'}{'presenter'}}, $presenter;
+            }
+
+
+            # star-rating: the data source seems to say <d30>0</d30> 
+            # if they mean "unknown"
+            # valid values seem to be 1 to 5
+            # 2 is never used
+            if ( $star_rating gt 0 ) {
+                $prog{'star-rating'} = ["$star_rating/5"];
+            }
+
+            if ( $age_rating gt 0 ) {
+                $prog{'rating'} = [ [$age_rating] ];
+            }
+
+            if ($wide_aspect == 1 ) {
+                $prog{'video'}->{'aspect'} = '16:9';
+            }
+
+            if ($bw_colour == 1 ) {
+                $prog{'video'}->{'colour'} = '0';
+            }
+
+            if ( $sequence gt 0 ) {
+                $prog{'episode-num'} = [ [$sequence, 'onscreen' ] ];
+            }
+
+            # check for dolby first
+            # not sure if dolby_audio and stereo_audio can be true 
+            # simultaneously in the source data, but it's better to be 
+            # on the safe side.
+            # If stereo_audio is false, is it safe to assume the programme
+            # will be broadcast in mono?
+            # I mean, this is the 21th century, right?
+            # Also, what does dolby mean in this context? 
+            # How does it apply to analog broadcasts?
+            if ($dolby_audio == 1) {
+                 $prog{'audio'}->{'stereo'} = 'dolby';
+            }
+            elsif ($stereo_audio == 1) {
+                $prog{'audio'}->{'stereo'} = 'stereo';
+            }
+
+            if ( length($production_year) > 0 ) {
+                $production_year =~ s/(\d*).*/$1/;	#take only first year
+                $prog{'date'} = $production_year;
+            }
+
+            $writer->write_programme(\%main::prog);
+            
+    }
+  $twig->purge;
+}
+
+
+
+# this is called as a handler for the channels twig
+# which is in turn called by processxml()
+sub printchannels {
+    my( $twig, $sendung)= @_;
+    my $internalchanid = $sendung->first_child('ch4')->text;
+    our $chanid;
+    if (defined $main::chanid{$internalchanid}) {
+         $chanid = $main::chanid{$internalchanid};
+    }
+    else {
+         $chanid = $internalchanid;
+    # FIXME: not sure if this is correct.
+    # Maybe we should just return if we don't know the channel id
+    }
+    my $name = decode_entities($sendung->first_child('ch0')->text); 
+    foreach my $channel (@{$conf->{channel}}) {
+        if($channel eq $chanid) {
+        my %ch = (id => $chanid, 'display-name' => [ [ $name ] ]); 
+        $writer->write_channel(\%ch);
+        }
+    }
+}
+
+# this lists all _available_ channels
+# used for --configure
+# independent from printchannels which will print list of configured channels
+sub list_channels {
+    my ( $conf, $opt ) = @_;
+    my $pin = $conf->{pin}->[0];
+    # make sure we know $channelgroup
+    downloadepg('1','0',$pin);
+    prepareinclude($conf, $opt);
+    # borrowed from http://www.xmltwig.com/xmltwig/ex_fm1
+    $channels->parsefile($tmp . 'channel_' . $channelgroup . '.xml');
+    my $channel_list= $channels->root;
+    my @channels= $channel_list->children;
+
+    my $xmltv_channel_list = "<tv generator-info-name=\"tv_grab_eu_epgdata\">\n";
+
+    foreach my $channel  (@channels) {
+        my $internalchanid = $channel->first_child('ch4')->text;
+        our $chanid;
+        if (defined $main::chanid{$internalchanid}) {
+            $chanid = $main::chanid{$internalchanid};
+        }
+        else {
+            $chanid = $internalchanid;
+            warn "New channel with ID $internalchanid found. Please update chann
+el_ids file!" unless $opt->{quiet};
+        }
+
+    my $name = decode_entities($channel->first_child('ch0')->text);
+    $xmltv_channel_list = <<END;
+    $xmltv_channel_list
+    <channel id="$chanid">
+    <display-name>$name</display-name>
+    </channel>
+END
+     }
+     $xmltv_channel_list = $xmltv_channel_list . "</tv>";
+     return $xmltv_channel_list
+}
+

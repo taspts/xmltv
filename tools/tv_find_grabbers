@@ -1,0 +1,296 @@
+#!/usr/bin/perl -w
+
+use strict;
+use File::Spec;
+use Getopt::Long;
+
+use XMLTV::Version '$Id: tv_find_grabbers,v 1.4 2010/11/22 23:40:07 dekarl Exp $';
+
+# How long shall a grabber have to respond to our calls in seconds?
+my $CMD_TIMEOUT = 15;
+
+=pod
+
+=head1 NAME
+
+tv_find_grabbers - Find all XMLTV grabbers that are installed on the system.
+
+=head1 SYNOPSIS
+
+tv_find_grabbers --help
+
+tv_find_grabbers [-I <dir>] [--slow] [capability] ...
+            
+=head1 DESCRIPTION
+
+tv_find_grabbers searches the PATH for XMLTV grabbers and returns a list
+of all grabbers that it finds. The list contains one entry per line in the
+format
+
+/usr/bin/tv_grab_fr|France
+
+i.e. the name of the executable and the region that it serves, separated by a
+vertical bar.
+
+=head1 OPTIONS
+
+-I <dir>  Include a directory in the search for grabbers. May be used
+          multiple times. The default is to search the PATH.
+
+--slow When checking grabbers, compile and run them instead of searching
+       their source code for capabilities and description
+
+--verbose Print progress information to STDERR.
+
+=head1 AUTHOR
+
+Mattias Holmlund, mattias -at- holmlund -dot- se. 
+
+=cut
+my $opt = { "include" => [],
+            help => 0,
+            verbose => 0,
+            slow => 0,
+          };
+
+my $res = GetOptions( $opt, qw/
+                      include|I=s
+                      help|h
+                      verbose|v
+                      slow|s
+                      / );
+
+if( (not $res) or $opt->{help} )
+{
+    print << "EOHELP";
+Usage: $0 [-I dir] [capability] ...
+
+EOHELP
+
+    exit 1;
+}
+
+my( @req_cap ) = ("baseline", @ARGV);
+
+my @paths = File::Spec->path();
+push @paths, @{$opt->{include}};
+
+# Find only unique entries in PATH to avoid investigating the same 
+# grabber twice. From "perldoc -q duplicate".
+my %seen = ();
+my @unique = grep { ! $seen{ $_ }++ } @paths;
+
+foreach my $p (@unique)
+{
+    print STDERR "Searching in $p\n" if $opt->{verbose};
+
+    next if (!opendir(DIR, $p));
+    my @grabbers = grep(/^tv_grab_/, readdir(DIR));
+    closedir(DIR);
+
+    foreach my $grabber (@grabbers)
+    {
+        $grabber = File::Spec->catfile ($p, $grabber);
+	print STDERR "Investigating $grabber\n" if $opt->{verbose};
+
+        my $cap = undef;
+        my $cap_src = undef;
+        open GRABBER, "<", $grabber;
+
+        unless ($opt->{slow})
+        {
+            while (my $line = <GRABBER>)
+            {
+                # First read the grabber script and try to determine the capabilities 
+                # it supports - first for older grabbers using XMLTV::Capabilities
+                if ($line =~ m{^use\s+XMLTV::Capabilities\s+qw/(.*)/;})
+                {
+                    $cap = $1;
+                    $cap_src = "source";
+                    last;
+                }
+                # and second for newer grabbers using XMLTV::Options
+                elsif ($line =~ m{capabilities\s+=>\s+\[qw/(.*)/\]})
+                {
+                    $cap = $1;
+                    $cap_src = "source";
+                    last;
+                }
+            }
+        }
+        # Having not found the capabilities by checking the code directly, we 
+        # compile and run the grabber and capture the output
+        if (not defined $cap)
+        {
+	    $cap = run_capture( "$grabber --capabilities 2>/dev/null" );
+            $cap_src = "run_capture";
+        }
+
+	if (not defined $cap)
+	{
+            close GRABBER;
+            print STDERR "  No capabilities found...\n" if $opt->{verbose};
+	    next;
+	}
+        else
+        {
+            print STDERR "  Found capabilities ($cap_src): $cap\n" if $opt->{verbose};
+        }
+
+	my @capabilities = split( /\s+/, $cap );
+	my %capability;
+	foreach my $c (@capabilities)
+	{
+	    $capability{$c} = 1;
+	}
+
+	my $failed = 0;
+	foreach my $c (@req_cap)
+	{
+	    $failed=1 
+		if not defined( $capability{$c} );
+	}
+
+	if ($failed)
+        {
+            close GRABBER;
+            next;
+        }
+        
+        my $desc = undef;
+        my $desc_src = undef;
+        seek GRABBER, 0, 0; # reset to start of file
+        
+        unless ($opt->{slow})
+        {
+            while (my $line = <GRABBER>)
+            {
+                # Now read the grabber script and try to determine its description
+                # - first for older grabbers using XMLTV::Description
+                if ($line =~ m{^use\s+XMLTV::Description\s+["|'](.*)["|'];})
+                {
+                    $desc = $1;
+                    $desc_src = "source";
+                    last;
+                }
+                # and second for newer grabbers using XMLTV::Options
+                elsif ($line =~ m{description\s+=>\s+["|'](.*)["|']})
+                {
+                    $desc = $1;
+                    $desc_src = "source";
+                    last;
+                }
+            }
+        }
+        # Having not found the description by checking the code directly, we 
+        # compile and run the grabber and capture the output
+        if (not defined $desc)
+        {
+            $desc = run_capture( "$grabber --description 2>/dev/null" );
+            $desc_src = "run_capture";
+        }
+        
+	if (not defined $desc)
+	{
+            close GRABBER;
+            print STDERR "  No description found...\n" if $opt->{verbose};
+	    next;
+	}
+        else
+        {
+            print STDERR "  Found description ($desc_src): $desc\n" if $opt->{verbose};
+        }
+        
+	$desc =~  s/^\s+//;
+	$desc =~  s/\s+$//;
+        print "$grabber|$desc\n";
+        
+        close GRABBER;
+    }
+}
+
+# Run an external command and return the output. Exit if the command is 
+# interrupted with ctrl-c.
+sub run_capture {
+    my( $cmd ) = @_;
+
+#    print "Running $cmd\n";
+
+    my $killed = 0;
+    my $result;
+
+    # Set a timer and run the real command.
+    eval {
+	local $SIG{ALRM} =
+            sub {
+		# ignore SIGHUP here so the kill only affects children.
+		local $SIG{HUP} = 'IGNORE';
+		kill 1,(-$$);
+		$killed = 1;
+	    };
+	alarm $CMD_TIMEOUT;
+	$result = qx/$cmd/;
+	alarm 0;
+    };
+    $SIG{HUP} = 'DEFAULT';    
+
+    if( $killed )
+    {
+	print STDERR "Timeout from: $cmd\n";
+	return undef;
+    }
+
+    if ($? == -1) {
+	return undef;
+    }
+    elsif ($? & 127) {
+	exit 1;
+    }
+
+    if( $? >> 8 )
+    {
+	return undef;
+    }
+    else
+    {
+	return $result;
+    }
+}
+
+=head1 COPYRIGHT
+
+Copyright (C) 2005 Mattias Holmlund.
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+=cut
+
+### Setup indentation in Emacs
+## Local Variables:
+## perl-indent-level: 4
+## perl-continued-statement-offset: 4
+## perl-continued-brace-offset: 0
+## perl-brace-offset: -4
+## perl-brace-imaginary-offset: 0
+## perl-label-offset: -2
+## cperl-indent-level: 4
+## cperl-brace-offset: 0
+## cperl-continued-brace-offset: 0
+## cperl-label-offset: -2
+## cperl-extra-newline-before-brace: t
+## cperl-merge-trailing-else: nil
+## cperl-continued-statement-offset: 2
+## indent-tabs-mode: t
+## End:
