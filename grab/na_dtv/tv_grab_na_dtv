@@ -415,13 +415,10 @@ sub scrape_channel_list {
   my ( $browser, $zip, $channels, $ch ) = @_;
 
   # Set zipcode (start session)
-  my $setZipUrl =
-"${SITEBASE}/lightbox/lightboxZipCode.jsp?_DARGS=/entertainment/lightbox/component/lightboxZipCodeComponent.jsp";
-  my %params = (
-"/directv/eportal/formhandler/EportalProfileFormHandler.profileUpdateForm.zipCode"
-      => "$zip" );
-  print STDERR "Setting zip code\n" if ($VERBOSE);
-  $browser->post( $setZipUrl, Content => \%params );
+  #my $setZipUrl = "${SITEBASE}/lightbox/lightboxZipCode.jsp?_DARGS=/entertainment/lightbox/component/lightboxZipCodeComponent.jsp"; 
+  #my %params = ( "/directv/eportal/formhandler/EportalProfileFormHandler.profileUpdateForm.zipCode" => "$zip" );
+  #print STDERR "Setting zip code\n" if ($VERBOSE);
+  #$browser->post( $setZipUrl, Content => \%params );
 
   print STDERR "Getting channel list\n" if ($VERBOSE);
   my $listUrl = $CHANNEL_LIST_URL . "?hideDupes=true&view=ALL&zipcode=${zip}";
