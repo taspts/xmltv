@@ -117,7 +117,7 @@ $TMP_FILEBASE .= '/na_dtv_';
 
 my $queue_filename = "$TMP_FILEBASE" . "q";
 
-my $SITEBASE = "https://www.directv.com/entertainment";
+my $SITEBASE = "http://www.directv.com/entertainment";
 
 # URL for grabbing channel list
 my $CHANNEL_LIST_URL = "$SITEBASE/data/guideChannelList.json.jsp";
@@ -271,6 +271,7 @@ sub getBrowser {
   my $browser = WWW::Mechanize->new();
   $browser->proxy( [ 'http', 'https' ], $conf->{proxy}->[0] )
     if $conf->{proxy}->[0];
+  $browser->agent_alias('Windows Mozilla');
   return $browser;
 }
 
@@ -415,10 +416,10 @@ sub scrape_channel_list {
   my ( $browser, $zip, $channels, $ch ) = @_;
 
   # Set zipcode (start session)
-  #my $setZipUrl = "${SITEBASE}/lightbox/lightboxZipCode.jsp?_DARGS=/entertainment/lightbox/component/lightboxZipCodeComponent.jsp"; 
-  #my %params = ( "/directv/eportal/formhandler/EportalProfileFormHandler.profileUpdateForm.zipCode" => "$zip" );
-  #print STDERR "Setting zip code\n" if ($VERBOSE);
-  #$browser->post( $setZipUrl, Content => \%params );
+  my $setZipUrl = "${SITEBASE}/lightbox/lightboxZipCode.jsp?_DARGS=/entertainment/lightbox/component/lightboxZipCodeComponent.jsp"; 
+  my %params = ( "/directv/eportal/formhandler/EportalProfileFormHandler.profileUpdateForm.zipCode" => "$zip" );
+  print STDERR "Setting zip code\n" if ($VERBOSE);
+  $browser->post( $setZipUrl, Content => \%params );
 
   print STDERR "Getting channel list\n" if ($VERBOSE);
   my $listUrl = $CHANNEL_LIST_URL . "?hideDupes=true&view=ALL&zipcode=${zip}";
@@ -650,13 +651,15 @@ sub scrape_program_details {
   my $xmlStop  = $stopDate->printf("%Y%m%d%H%M%S -0000");
 
   # Get program details page
-  print STDERR "Retrieving details for program id $program_id\n" if ($DEBUG);
-  my $resp = $browser->get( $DETAILS_URL . $program_id );
+  my $programDetailsUrl = $DETAILS_URL . $program_id;
+  print STDERR "Retrieving details for program id $program_id: $programDetailsUrl\n" if ($DEBUG);
+  my $resp = $browser->get( $programDetailsUrl );
   if(! $resp->is_success()) {
     print STDERR "Error getting program details for $program_id: " . $resp->status_line() . "\n";
   }
 
-  my $parser = HTML::TokeParser->new( \$browser->content() );
+  my $detailContent = $browser->content();
+  my $parser = HTML::TokeParser->new( \$detailContent );
 
   # Extract program details
   my $xml_desc        = '';
