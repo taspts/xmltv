@@ -275,15 +275,14 @@ sub getBrowser {
   return $browser;
 }
 
-# Converts a timestamp from DirecTV JSON (ISO 8601: YYYY-MM-DDTHH:MM:SS.mmmZZZZ)
-# to that used by XMLTV (YYYYMMDDHHMMSS ZZZ). DirecTV returns UTC, so we'll
-# stick with that since timezones are no fun.
+# Converts a timestamp from DirecTV JSON (ISO 8601: YYYY-MM-DDTHH:MM:SS.mmmZZZZZ)
+# to that used by XMLTV (YYYYMMDDHHMMSS ZZZZ). 
 sub convertDtvTimeString {
   my ($input) = @_;
-  my $output = $input;
-  $output =~ s/[-T:]//g;    # Remove -,T,:
-  $output = substr( $output, 0, 14 ); # Take first 14 characters: YYYYMMDDHHMMSS 
-  $output .= " -0000"; # UTC 
+  my $output;
+  $input =~ s/[-T:]//g;    # Remove -,T,:
+  $output = substr( $input, 0, 14 ); # Take first 14 characters: YYYYMMDDHHMMSS 
+  $output .= " " . substr( $input, -5); # Take last 5 characters as timezone offset 
   return $output;
 }
 
@@ -615,7 +614,6 @@ sub scrape_channel_day {
     foreach my $prog (@schedules) {
       # Get program details
       $output .= &scrape_program_details( $browser, $channel_number, $prog );
-      $output .= "</programme>\n";
     }
   }
   return $output;
@@ -640,7 +638,7 @@ sub scrape_program_details {
   
   my $channel_id = &rfc2838($channel_number);
 
-  # Format start time in XMLTV spec (yyyymmddhhmmss)
+  # Format start time in XMLTV spec (yyyymmddhhmmss zzzzz)
   my $xmlStart = convertDtvTimeString($start);
 
   # Calculate stop time
@@ -648,7 +646,7 @@ sub scrape_program_details {
   my $delta     = new Date::Manip::Delta();
   $delta->parse("0:0:0:0:0:${length}:0");
   my $stopDate = $startDate->calc($delta);
-  my $xmlStop  = $stopDate->printf("%Y%m%d%H%M%S -0000");
+  my $xmlStop  = $stopDate->printf("%Y%m%d%H%M%S %z");
 
   # Get program details page
   my $programDetailsUrl = $DETAILS_URL . $program_id;
@@ -788,5 +786,8 @@ OUTER: while ( my $tag = $parser->get_tag( "li", "span" ) ) {
   $xml .= "  <star-rating><value>" . xmltr($xml_star_rating) . "</value></star-rating>\n"
     if $xml_star_rating;
 
+  $xml .= "</programme>\n";
+
+  #print STDERR "\n\n$xml\n" if ($DEBUG);
   return $xml;
 }
