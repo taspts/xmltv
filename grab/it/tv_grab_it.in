@@ -71,6 +71,11 @@
 # rimosso searchch
 # 28/12/2010
 # aggiunta opzione --mythweb-categories per utilizzare le categorie usate da mythweb invece di quelle del sito
+# 25/02/2011
+# aggiunto patch per mediaset da charon66
+# tolto backend dahlia
+# 24/07/2011
+# nuovi canali
 #################################################
 # TODO
 # - add more informative errors in xml
@@ -87,7 +92,7 @@ my $DEF_LANG = 'eng';
 use warnings;
 use strict;
 
-use XMLTV::Version '$Id: tv_grab_it.in,v 1.98 2010/12/28 14:21:24 mnbjhguyt Exp $';
+use XMLTV::Version '$Id: tv_grab_it.in,v 1.100 2011/07/24 10:34:24 mnbjhguyt Exp $';
 use XMLTV::Capabilities qw/baseline manualconfig cache/;
 use XMLTV::Description 'Italy';
 use XMLTV::Supplement qw/GetSupplement/;
@@ -143,7 +148,7 @@ my $MAX_DAYS=7;
 my $LANG="it";
 my $date_today = UnixDate("today", '%Y-%m-%d');
 
-my @default_backends = ('mediaset', 'skylife', 'raiit', 'mediasetpremium', 'iris', 'boingtv', 'dahlia', 'mtvit', 'la7');
+my @default_backends = ('mediaset', 'skylife', 'raiit', 'mediasetpremium', 'iris', 'boingtv', 'mtvit', 'la7');
 
 
 my %channels; #to store display names
@@ -1874,6 +1879,11 @@ sub mediasetpremium_get_channels_list {
                   "Premium Cinema Energy", "KG",
                   "Premium Extra", "K8",
                   "Premium Extra 2", "K9",
+                  "BBC Knowledge", "EB",
+                  "Discovery World", "ED",
+                  "Disney Junior", "KP",
+                  "Premium Cinema Comedy", "LC",
+                  "Premium Crime", "LR",
       );
 
     foreach (keys %chan_hash) {
@@ -2029,11 +2039,16 @@ sub mediasetpremium_fetch_data {
 				$rating=$1;
 				#warn "categoria: $1\n";
 			}
+			elsif ($l=~/trafficLight>(.*?)<\/trafficLight/){
+				$rating=$1;
+				#warn "categoria: $1\n";
+			}
 			elsif ($l=~/parentalRating\/.*/){
 				#$rating=$1;
 				#warn "categoria: $1\n";
 			}			
-			elsif ($l=~/audio audioType=\"(.*?)\" doppioAudio=\"(.*?)\" sottotitoli=\"(.*?)\">Not used<\/audio/){
+			elsif ($l=~/audio audioType=\"(.*?)\" doppioAudio=\"(.*?)\" sottotitoli=\"(.*?)\">Not used<\/audio/ or
+			       $l=~/audio audioType=\"(.*?)\" doppioAudio=\"(.*?)\" sottotitoli=\"(.*?)\">Not live<\/audio/){
 				($audio, $doppioaudio, $sottotitoli) = ($1, $2, $3);
 				#warn "audio: $audio, $doppioaudio, $sottotitoli\n";
 			}
@@ -2945,6 +2960,7 @@ sub mediaset_fetch_data {
 #		warn "|$1|$2|$3|$4|$5|\n";
 		my %programme = ();
 		my ($id, $time_start, $criptato, $title) = ($1, $5, $3, $4);
+		my $subtitle;
 		
 		next unless $title;	
 		
@@ -2979,7 +2995,13 @@ sub mediaset_fetch_data {
 		}
 
 		$programme{channel}=$xmltv_id;
+		if ($title =~ m/--/) {
+			my @fulltitle = split("--", $title);
+			$title = $fulltitle[0];
+			$subtitle= tidy($fulltitle[1]);
+		}
 		$programme{title} = [[tidy($title), $LANG] ] if (defined $title);
+		$programme{'sub-title'}=[[tidy($subtitle), $LANG ]] if (defined $subtitle);
 
 		#put info in array
 		push @programmes, {%programme};

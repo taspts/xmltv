@@ -52,7 +52,7 @@ use IO::Scalar; # used for configuration to write channels to string
 my $grabber_name = '@@name';
 
 # Grabber version
-my $grabber_cvs_id = '$Id: tv_grab_uk_rt.in,v 1.337 2011/01/08 21:23:36 knowledgejunkie Exp $';
+my $grabber_cvs_id = '$Id: tv_grab_uk_rt.in,v 1.356 2012/01/12 05:11:44 knowledgejunkie Exp $';
 my $grabber_version;
 
 if ($grabber_cvs_id =~ m!\$Id: [^,]+,v (\S+) ([0-9/: -]+)!) {
@@ -203,15 +203,20 @@ my %reversed_title_subtitle;  # key = title, value = title
 my %replacement_titles;       # key = old title, value = replacement title
 my %replacement_episodes;     # key = title, value = hash (where key = old ep, value = new ep)
 my %replacement_cats;         # key = title, value = category
-my %replacement_title_eps;    # key = 'old_title . old_ep', value = (new_title, new_ep)
+my %replacement_title_eps;    # key = 'old_title . '|' . old_ep', value = (new_title, new_ep)
 my %flagged_title_eps;        # key = old_title from title fixup routine 8
+my %dotdotdot_titles;         # key = replacement title ending with '...' seen in title fixup routine 8
 my %replacement_ep_from_desc; # key = title, value = hash (where key = desc, value = new ep)
 my %uc_prog_titles;           # key = title, value = title
+my %title_in_subtitle_fixed;  # key = 'title . '|' . episode', value = hashref (keys are title and episode)
+my %title_in_subtitle_notfixed; # key = 'title . '|' . episode', value = hashref (keys are title and episode)
+my %colon_in_subtitle;        # key = 'title . '|' . episode', value = hashref (keys are title and episode)
 
-# Create global hash to store the programme titles for all programmes on all
-# channels, as we will process this last after grabbing to determine any
-# 'manufactured' titles which may include temporary 'seasonal' information
+# Create global hashes to store programme/film titles for all programmes on all
+# channels, as we will process these lists after grabbing to determine any
+# titles which may need to be 'fixed up'
 my %prog_titles;
+my %film_titles;
 # hash to store case/punctuation-insensitive variants of titles
 my %case_insens_titles;
 
@@ -224,7 +229,7 @@ my %utf8_fixups;
 
 # Create hashes to store names/urls of channels with occurences of mis-encoded
 # UTF-8 data after our replacement routines have run
-my %hasC27FBFchars;
+my %hasC27F9Fchars;
 my %hadEFBFBD;
 my %hadC3AFC2BFC2BD;
 
@@ -293,7 +298,10 @@ if ($opt->{debug}) {
         print_uc_titles_post();
         print_title_variants();
         print_titles_inc_years();
+        print_titles_inc_bbfc_certs();
         print_flagged_title_eps();
+        print_dotdotdot_titles();
+        print_title_in_subtitle();
 
         print_categories();
         print_uncategorised_progs();
@@ -562,7 +570,7 @@ sub config_stage {
         } );
         $writer->write_option( {
             value => 'none',
-            text => [ [ 'None of these, I\'ll choose my channels', 'en' ] ],
+            text => [ [ 'None of these, I\'ll choose channels manually', 'en' ] ],
         } );
         $writer->write_option( {
             value => 'freeview',
@@ -578,11 +586,11 @@ sub config_stage {
         } );
         $writer->write_option( {
             value => 'freesat',
-            text => [ [ 'FreeSat', 'en' ] ],
+            text => [ [ 'Freesat', 'en' ] ],
         } );
         $writer->write_option( {
             value => 'freesatfromsky',
-            text => [ [ 'FreeSat from Sky', 'en' ] ],
+            text => [ [ 'Freesat from Sky', 'en' ] ],
         } );
         $writer->write_option( {
             value => 'analogue',
@@ -1474,6 +1482,9 @@ sub load_prog_titles_to_process {
                     t("[8] Ignoring fixup '" . $process_text . "' as old/new title not given");
                     next PROG_TITLE_ENTRY;
                 }
+                if ($old_title eq $new_title) {
+                    t("[8]   Old/new title are the same - change to a type 7 title fixup: '" . $process_text . "'");
+                }
                 # remember old title so that we can output a debug list of
                 # programmes that may also need to be handled via this fixup
                 $flagged_title_eps{$old_title} = $old_title;
@@ -1482,6 +1493,13 @@ sub load_prog_titles_to_process {
                 $replacement_title_eps{$key} = [$new_title, $new_ep];
                 t("[8] Will update old title/subtitle '" . $old_title . ": " . $old_ep 
                     . "' to '" . $new_title . ": " . $new_ep . "'");
+
+                # store titles that are being corrected with an existing "some title..." fixup
+                # store the title without a leading "The" or "A" or the trailing "..." for later matching
+                if ($new_title =~ m/^(?:The\s+|A\s+)?(.*)\.\.\.$/) {
+                    $dotdotdot_titles{$1} = $new_title;
+                }
+                
                 $have_title_data = 1;
                 next PROG_TITLE_ENTRY;
             }
@@ -1555,7 +1573,7 @@ sub load_utf8_fixups {
             # ignore unknown fixup formats
             if ($bad_chars !~ m/\\xEF\\xBF\\xBD/ 
                     && $bad_chars !~ m/\\xC3\\xAF\\xC2\\xBF\\xC2\\xBD/ 
-                    && $bad_chars !~ m/^\\xC2\\x[8-9][0-9A-F]$/) {
+                    && $bad_chars !~ m/^\\xC2\\x[8-9][0-9A-F]/) {
                 t("Ignoring UTF-8 fixup: '" . $line . "'");
                 next UTF8_FIXUP_ENTRY;
             }
@@ -1573,10 +1591,10 @@ sub load_utf8_fixups {
             elsif ($bad_chars =~ m/\\xC3\\xAF\\xC2\\xBF\\xC2\\xBD/) {
                 $utf8_fixups{'C3AFC2BFC2BD'}{$bad_chars} = $replacement;
             }
-            elsif ($bad_chars =~ m/^\\xC2\\x[8-9][0-9A-F]$/) {
+            elsif ($bad_chars =~ m/^\\xC2\\x[8-9][0-9A-F]/) {
                 $utf8_fixups{'C2809F'}{$bad_chars} = $replacement;
             }
-                
+
             # Process the regex to get a character string to print. We use
             # the preserved hex string during processing
             my $bad_chars_chr = $bad_chars;
@@ -1935,15 +1953,10 @@ sub process_utf8_fixups($$$) {
                     my $replacement = $utf8_fixups{'C2809F'}{$bad_chars};
                     # Search for the regex string and replace with char string
                     if ($page =~ s/$bad_chars/$replacement/g) {
-                        t("      Replaced mis-encoded character with \"" 
-                                . $replacement . "\"");
+                        t("      Replaced mis-encoded characters \"" . $bad_chars 
+                                 . "\" with \"". $replacement . "\"");
                     }
                 }
-            }
-            if ($page =~ m/\xC2[\x80-\x9F]/g) {
-                t("    After fixups, data for '$rt_name' still contains " 
-                        . "characters in range [C2][7F-9F]\n");
-                $hasC27FBFchars{$rt_name} = $rt_listings_uri;
             }
         }
 
@@ -1960,7 +1973,7 @@ sub process_utf8_fixups($$$) {
             t("      Replaced non-breaking spaces with regular spaces");
         }
 
-        # Finally, remove any remaining non-printing control characters (keep 
+        # Remove any remaining non-printing control characters (keep 
         # \t \n and \r). Refer to above table for ISO-8859-1 and UTF-8 Unicode 
         # encodings for chars.
         #
@@ -1969,10 +1982,13 @@ sub process_utf8_fixups($$$) {
             t("    Removed non-printing characters (range [00]-[1F]) from "
                     . "'$rt_name' listings data");
         }
-        # Next, chars in UTF-8 range [C2][7F-9F] (ISO-8859-1 range [7F-9F])
+
+        # Next, remove any remaining byte pairs in UTF-8 range [C2][7F-9F]
+        # (ISO-8859-1 range [7F-9F]) (non-printing)
         if (s/[\xC2][\x7F-\x9F]//g) {
             t("    Removed non-printing characters (range [C2][7F-9F]) from "
                     . "'$rt_name' listings data");
+            $hasC27F9Fchars{$rt_name} = $rt_listings_uri;
         }
     }
 
@@ -2292,21 +2308,56 @@ sub extract_numbering_from_sub_title($) {
     if (defined $prog->{'_sub_title'}
              && $prog->{'_sub_title'} =~ m/\d+|series|episode/i) {
         
-        # ) check for "x/y" format covering following formats
+        # ) check for most common "x/y, series z" format first
         #
-        # "1"
-        # "1/6"
         # "1/6, series 1"
-        # "1, series 1"
-        # "1&2/6, series 1" - second episode unused
-        # "1&2"
-        # "1 and 2/6, series 1"
-        # "1A/6, series 1" - episode "part A or B" currently unused
         #            
         if ($prog->{'_sub_title'} =~
             s{
               ^                       # start at beginning of sub_title details
               (\d+)                   # CAPTURE the first number(s) found ($episode_num)
+              \/                      # forward slash
+              (\d+)                   # CAPTURE the second number(s) found ($num_episodes)
+              ,                       # comma
+              \s                      # whitespace
+              series\s(\d+)           # check for series number information ($series_num)
+              $                       # stop at end of sub_title details
+            }
+            {}ix ) {
+                $prog->{'_episode_num'} = $1 - 1;
+                # Check that source episode number is not greater than number of episodes
+                # Rather than discard the episode number, we discard the total instead which
+                # is more likely to be incorrect based on observation.
+                if ($1 <= $2) {
+                    $prog->{'_num_episodes'} = $2;
+                    t("    Episode number/total found: episode $1 of $2 (subtitle: x/y, series z)");
+                }
+                else {
+                    t("    Bad episode total found: episode $1 of $2, discarding total (subtitle: x/y, series z)");
+                }
+                t("    Series number found: series $3 (subtitle: x/y, series z)");
+                $prog->{'_series_num'} = $3 - 1;
+                $prog->{'_processed'} = 1;
+        }
+        
+        # ) check for "x/y" formats covering other formats
+        #
+        # "1"
+        # "1/6"
+        # "1, series 1"
+        # "1/6, series 1"
+        # "1`/3, series 1"
+        # "1&2/6, series 1" - second episode unused
+        # "7&1, series 1&2" - second episode and series unused
+        # "1&2"
+        # "1 and 2/6, series 1"
+        # "1A/6, series 1" - episode "part A or B" currently unused
+        #
+        elsif ($prog->{'_sub_title'} =~
+            s{
+              ^                       # start at beginning of sub_title details
+              (\d+)                   # CAPTURE the first number(s) found ($episode_num)
+              `?                      # ignore any erroneous chars
               (?:A|B)?                # ignore optional episode "part"
               \s*                     # ignore any whitespace
               (?:(?:&|and)\s*\d+)?    # check for "&2", "and 2" details relating to following episode
@@ -2317,7 +2368,7 @@ sub extract_numbering_from_sub_title($) {
               \s*                     # ignore any whitespace
               (?:,)?                  # check for punctuation characters
               \s*                     # ignore any whitespace
-              (?:series\s*(\d+))?     # check for series number information ($series_num)
+              (?:series\s*(\d+)(?:&\d+)?)?  # check for series number information ($series_num)
               \s*                     # ignore any whitespace
               $                       # stop at end of sub_title details
             }
@@ -2881,7 +2932,10 @@ sub extract_numbering_from_title($) {
     }
 }
 
-# Check for potential season/episode numbering in description
+# Check for potential season/episode numbering in description. Only
+# use numbering found in the desc if we have not already found it
+# elsewhere (i.e. prefer data provided in the subtitle field of the 
+# raw data).
 #
 sub extract_numbering_from_desc($) {
     my $prog = shift;
@@ -2907,17 +2961,31 @@ sub extract_numbering_from_desc($) {
           \s*                  # ignore any whitespace
         }
         {}ix ) {
-            $prog->{'_episode_num'} = $1 - 1;
-            $prog->{'_num_episodes'} = $2;
-            t("    Episode number found: episode $1 of $2 (desc)");
-            if (defined $3) {
+            my $updated_from_desc = 0;
+            if ( !defined $prog->{'_episode_num'} && !defined $prog->{'_num_episodes'} ) {
+                $prog->{'_episode_num'} = $1 - 1;
+                $prog->{'_num_episodes'} = $2;
+                t("    Episode number found: episode $1 of $2 (desc)");
+                $updated_from_desc++;
+            }
+            else {
+                t("    Ignoring episode numbering seen in desc (episode $1 of $2)");
+            }
+            if ( defined $3 ) {
                 my $series_digits = word_to_digit($3);
-                if (defined $series_digits and $series_digits > 0) {
-                    t("    Series number found: series $series_digits (parsed as $3 from desc)");
-                    $prog->{'_series_num'} = $series_digits - 1;
-                    $prog->{'_processed'} = 1;
+                
+                if ( !defined $prog->{'_series_num'} ) {
+                    if (defined $series_digits and $series_digits > 0) {
+                        $prog->{'_series_num'} = $series_digits - 1;
+                        t("    Series number found: series $series_digits (parsed as $3 from desc)");
+                        $updated_from_desc++;
+                    }
+                }
+                else {
+                    t("    Ignoring series numbering seen in desc (series $series_digits)");
                 }
             }
+            $prog->{'_processed'} = 1 if $updated_from_desc;
     }
 }
 
@@ -3194,6 +3262,18 @@ sub write_listings_data {
                 # text either parsed out or moved into $prog{'_episode'}
             }
 
+            # Check for null or invalid release year
+            if (defined $prog{'_year'}) {
+                if ($prog{'_year'} =~ m/null/i) {
+                    t("  Null release year given for this programme.");
+                    $prog{'_year'} = undef;
+                }
+                elsif ($prog{'_year'} !~ m/\d{4}/) {
+                    t("  Invalid release year given for this programme.");
+                    $prog{'_year'} = undef;
+                }
+            }
+
             # Remove production year information from $episode for films
             if (defined $prog{'_episode'}) {
                 if ($prog{'_film'} && $prog{'_episode'} =~ s/Prod Year (\d{4})//i) {
@@ -3228,6 +3308,43 @@ sub write_listings_data {
             # we monitor these before further title processing is carried out.
             if ($prog{'_title'} eq uc($prog{'_title'})) {
                 $uc_prog_titles{$prog{'_title'}} = $prog{'_title'};
+            }
+
+            # Debug output before any title processing takes place
+            if (defined $prog{'_episode'}) {
+                t("  Pre-processing title/episode details '" 
+                        . $prog{'_title'} . " / " . $prog{'_episode'} . "'");
+            }
+            
+            # 2010-04-16
+            # Listings for a few programmes are being provided that contain the
+            # programme title duplicated in the episode field, followed by
+            # the 'real' episode in parentheses or following a colon.
+            if (defined $prog{'_episode'}) {
+                my $tmp_title = $prog{'_title'};
+                my $tmp_episode = $prog{'_episode'};
+                my $key = $tmp_title . "|" . $tmp_episode;
+
+                # Remove the duplicated title from episode field if we find it
+                if ($tmp_episode =~ m/^\Q$tmp_title\E\s+\((.+)\)$/ || $tmp_episode =~ m/^\Q$tmp_title\E:\s+(.+)$/) {
+                    $prog{'_episode'} = $1;
+                    t("    Removing title text from beginning of episode field");
+                    if ($opt->{debug}) {
+                        $title_in_subtitle_fixed{$key} = { 'title'    => $tmp_title,
+                                                           'episode'  => $tmp_episode,
+                                                         };
+                    }
+                }
+                # Look for title appearing at end of episode field
+                elsif ($tmp_episode =~ m/^(.+):\s+\Q$tmp_title\E$/) {
+                    $prog{'_episode'} = $1;
+                    t("    Removing title text from end of episode field");
+                    if ($opt->{debug}) {
+                        $title_in_subtitle_fixed{$key} = { 'title'    => $tmp_title,
+                                                           'episode'  => $tmp_episode,
+                                                         };
+                    }
+                }
             }
             
             # First, remove non-title text found in programme title.
@@ -3281,10 +3398,6 @@ sub write_listings_data {
             process_replacement_genres(\%prog);
 
             # Look for series/episode/part numbering in programme title/subtitle
-            if (defined $prog{'_episode'}) {
-                t("  Pre-processing title/episode details '" 
-                        . $prog{'_title'} . " / " . $prog{'_episode'} . "'");
-            }
             extract_numbering_from_episode(\%prog);
             extract_numbering_from_title(\%prog);
             extract_part_numbering_from_episode(\%prog);
@@ -3331,6 +3444,9 @@ sub write_listings_data {
                 my $title_nopunc = lc $prog{'_title'};
                 $title_nopunc =~ s/^the\s+//;
                 $title_nopunc =~ s/(\s+and\s+|\s+&\s+)/ /g;
+                $title_nopunc =~ s/\s+No 1s$//g;
+                $title_nopunc =~ s/\s+No 1's$//g;
+                $title_nopunc =~ s/\s+Number Ones$//g;
                 $title_nopunc =~ s/' //g;
                 $title_nopunc =~ s/'s/s/g;
                 $title_nopunc =~ s/\W//g;
@@ -3341,11 +3457,31 @@ sub write_listings_data {
                 $case_insens_titles{$title_nopunc}{$prog{'_title'}}{'count'}++;
             }
             
+            # Check for title text still present in episode details
+            if ($opt->{debug} && defined $prog{'_episode'} && $prog{'_episode'} =~ m/^\Q$prog{'_title'}\E.*$/) {
+                my $key = $prog{'_title'} . "|" . $prog{'_episode'};
+                $title_in_subtitle_notfixed{$key} = { 'title'    => $prog{'_title'},
+                                                      'episode'  => $prog{'_episode'},
+                                                    };
+            }
+
+            # Check for episode details that contain a colon/hyphen - these may indicate
+            # a title in the episode field that needs to be moved into the title field
+            if ($opt->{debug} && defined $prog{'_episode'} && $prog{'_episode'} =~ m/(:|\s+-\s+)/) {
+                my $key = $prog{'_title'} . "|" . $prog{'_episode'};
+                $colon_in_subtitle{$key} = { 'title'    => $prog{'_title'},
+                                             'episode'  => $prog{'_episode'},
+                                           };
+            }
+
             # For non-films which may contain subtitle/episode information in
             # the title, add the title to the list of programme titles for
-            # later debugging
+            # later debugging. Likewise for films, but store in separate hash.
             if (!$prog{'_film'}) {
                 $prog_titles{$prog{'_title'}} = $prog{'_title'};
+            }
+            else {
+                $film_titles{$prog{'_title'}} = $prog{'_title'};
             }
 
             # Occasionally film listings contain the title duplicated in the 
@@ -3353,6 +3489,13 @@ sub write_listings_data {
             if ($prog{'_film'} && defined $prog{'_episode'} 
                                && (uc $prog{'_title'} eq uc $prog{'_episode'})) {
                 $prog{'_episode'} = undef;
+            }
+
+            # Check for films without a valid release year (absent or null string)
+            if ($prog{'_film'}) {
+                if (!defined $prog{'_year'}) {
+                    t("  No release year given for this film.");
+                }
             }
 
             # Write out the programme's post-processed title 
@@ -3367,10 +3510,22 @@ sub write_listings_data {
             if (defined $prog{'_desc'}) {
                 $prog{'_desc'} =~ s/\s+/ /g;
 
+                # Check if desc start with "Premiere.". Remove text if found and set flag
+                if ($prog{'_desc'} =~ s/^Premiere\.\s*//) {
+                    t("  Setting premiere flag based on description.");
+                    $prog{'_premiere'} = 1;
+                }
+
+                # Flag showings described as repeats
+                elsif ($prog{'_desc'} =~ m/^Another chance/) {
+                    t("  Setting repeat flag based on description.");
+                    $prog{'_repeat'} = 1;
+                }
+                    
                 # Check if desc starts with "New series..."
-                if ($prog{'_desc'} =~ m/^New series/i) {
-                    # set the premiere flag
-                    $prog{premiere} = [ '' ];
+                elsif ($prog{'_desc'} =~ m/^New series/) {
+                    t("  Setting premiere flag based on description.");
+                    $prog{'_premiere'} = 1;
                     
                     # Now check if desc starts with "New series [(x/y)]. "
                     # Remove text and preserve numbering for processing below
@@ -3481,6 +3636,7 @@ sub write_listings_data {
             if (defined $prog{'_year'}) {
                 $prog{date} = $prog{'_year'};
             }
+            
             if ($prog{'_film'}) {
                 push @{$prog{category}}, [ 'Film', 'en' ];
             }
@@ -3943,11 +4099,12 @@ sub print_new_titles {
         foreach my $title (sort keys %prog_titles) {
             push(@titles_new, $title) if ($title =~ m/^(All New|New)\b/i);
             push(@titles_premiere, $title) if ($title =~ m/Premiere\b/i);
+            push(@titles_finale, $title) if ($title =~ m/Final\b/i);
             push(@titles_finale, $title) if ($title =~ m/Finale/i);
             push(@titles_anniv, $title) if ($title =~ m/Anniversary/i);
         }
         if (@titles_new || @titles_premiere || @titles_finale || @titles_anniv) {
-            say("\nStart of list of titles containing \"New/Premiere/Finale...\"");
+            say("\nStart of list of titles containing \"New/Premiere/Finale/etc...\"");
             if (@titles_new) {
                 say("  " . $_) foreach @titles_new;
                 say("");
@@ -3964,7 +4121,7 @@ sub print_new_titles {
                 say("  " . $_) foreach @titles_anniv;
                 say("");
             }
-            say("End of list of titles containing \"New/Premiere/Finale...\"");
+            say("End of list of titles containing \"New/Premiere/Finale/etc...\"");
         }
         
         my @titles_day;
@@ -4012,17 +4169,23 @@ sub print_new_titles {
         }
         
         my @titles_bestof;
+        my @titles_highlights;
         my @titles_results;
         my @titles_top;
         foreach my $title (sort keys %prog_titles) {
             push(@titles_bestof, $title) if ($title =~ m/Best of\b/i);
+            push(@titles_highlights, $title) if ($title =~ m/Highlights/i);
             push(@titles_results, $title) if ($title =~ m/Results?/i);
             push(@titles_top, $title) if ($title =~ m/\bTop\b/i);
         }
         if (@titles_bestof || @titles_results || @titles_top) {
-            say("\nStart of list of titles containing \"Results/Best of/etc\"");
+            say("\nStart of list of titles containing \"Results/Best of/Highlights/etc...\"");
             if (@titles_bestof) {
                 say("  " . $_) foreach @titles_bestof;
+                say("");
+            }
+            if (@titles_highlights) {
+                say("  " . $_) foreach @titles_highlights;
                 say("");
             }
             if (@titles_results) {
@@ -4033,16 +4196,16 @@ sub print_new_titles {
                 say("  " . $_) foreach @titles_top;
                 say("");
             }
-            say("End of list of titles containing \"Results/Best of/etc\"");
+            say("End of list of titles containing \"Results/Best of/Highlights/etc...\"");
         }
     }
 }
 
 sub print_misencoded_utf8_data {
-    if (%hasC27FBFchars && scalar keys %hasC27FBFchars > 0) {
-        say("\nStart of list of channels containing bad bytes in range [C2][7F-BF]");
-        foreach my $chan (sort keys %hasC27FBFchars) {
-            say("  $chan ($hasC27FBFchars{$chan})");
+    if (%hasC27F9Fchars && scalar keys %hasC27F9Fchars > 0) {
+        say("\nStart of list of channels containing unhandled bytes in range [C2][7F-9F]");
+        foreach my $chan (sort keys %hasC27F9Fchars) {
+            say("  $chan ($hasC27F9Fchars{$chan})");
         }
         say("End of list of channels");
     }
@@ -4134,6 +4297,60 @@ sub print_flagged_title_eps {
     }
 }
 
+sub print_dotdotdot_titles {
+    if (%dotdotdot_titles && scalar keys %dotdotdot_titles > 0) {
+        my %titles_to_output; # temp hash to store matches
+        if (%prog_titles) {
+            DOTDOTDOT_TITLE:
+            # In %dotdotdot_titles, the key is the 'normalised' title to match, 
+            # value is the full title to use in replacement
+            foreach my $dotdotdot_title (sort keys %dotdotdot_titles) {
+                PROG_TITLE:
+                foreach my $title (sort keys %prog_titles) {
+                    # ignore title having ellipses already
+                    next PROG_TITLE if $title =~ m/.*\.\.\.$/;
+                    
+                    if ($title =~ m/\Q$dotdotdot_title\E/i) {
+                        $titles_to_output{$title} = $dotdotdot_titles{$dotdotdot_title};
+                    }
+                }
+            }
+        }
+        # only output something if at least 1 matching title
+        if (%titles_to_output && scalar keys %titles_to_output > 0) {
+            say("\nStart of list of potential \"...\" titles that may need fixing individually");
+            foreach my $title (sort keys %titles_to_output) {
+                say("  Title '$title' may need to be fixed based on fixup '$titles_to_output{$title}'");
+            }
+            say("End of list of potential \"...\" titles that may need fixing individually");
+        }
+    }
+}
+
+sub print_title_in_subtitle {
+    if (%title_in_subtitle_fixed && scalar keys %title_in_subtitle_fixed > 0) {
+        say("\nStart of list of programmes where title was removed from sub-title field");
+        foreach my $prog_ref (sort keys %title_in_subtitle_fixed) {
+            say("  $title_in_subtitle_fixed{$prog_ref}->{'title'} / $title_in_subtitle_fixed{$prog_ref}->{'episode'}");
+        }
+        say("\nEnd of list of programmes where title was removed from sub-title field");
+    }
+    if (%title_in_subtitle_notfixed && scalar keys %title_in_subtitle_notfixed > 0) {
+        say("\nStart of list of programmes where title is still present in sub-title field");
+        foreach my $prog_ref (sort keys %title_in_subtitle_notfixed) {
+            say("  $title_in_subtitle_notfixed{$prog_ref}->{'title'} / $title_in_subtitle_notfixed{$prog_ref}->{'episode'}");
+        }
+        say("\nEnd of list of programmes where title is still present in sub-title field");
+    }
+    if (%colon_in_subtitle && scalar keys %colon_in_subtitle > 0) {
+        say("\nStart of list of programmes where sub-title contains colon/hyphen");
+        foreach my $prog_ref (sort keys %colon_in_subtitle) {
+            say("  $colon_in_subtitle{$prog_ref}->{'title'} / $colon_in_subtitle{$prog_ref}->{'episode'}");
+        }
+        say("\nEnd of list of programmes where sub-title contains colon/hyphen");
+    }
+}
+
 sub print_uc_titles_pre {
     if (scalar keys %uc_prog_titles > 0) {
         say("\nStart of list of uppercase titles before processing");
@@ -4164,12 +4381,30 @@ sub print_titles_inc_years {
     if (%prog_titles) {
         my @titles_years;
         foreach my $title (sort keys %prog_titles) {
-            push @titles_years, $title if ($title =~ m/\d{4}/);
+            if ($title =~ m/\b\d{4}\b/) {
+                push @titles_years, $title;
+            }
         }
         if (@titles_years) {
             say("\nStart of list of titles including possible years");
             say("  " . $_) foreach @titles_years;
             say("End of list of titles including possible years");
+        }
+    }
+}
+
+sub print_titles_inc_bbfc_certs {
+    if (%film_titles) {
+        my @titles_certs;
+        foreach my $title (sort keys %film_titles) {
+            if ($title =~ m/\(U|PG|12A|15|18\)$/) {
+                push @titles_certs, $title;
+            }
+        }
+        if (@titles_certs) {
+            say("\nStart of list of film titles including possible BBFC certificates");
+            say("  " . $_) foreach @titles_certs;
+            say("End of list of film titles including possible BBFC certificates");
         }
     }
 }
@@ -4417,7 +4652,7 @@ machine-readable files made available from the Radio Times website.
 =head1 USAGE
 
 First run B<@@name --configure> to choose which channels you want to 
-receive listings for.  Then run B<@@name> with no arguments to get
+receive listings for.  Then run B<@@name> (with optional arguments) to get
 around 14 days of listings for your configured channels.
 
 =head1 OPTIONS
@@ -4434,7 +4669,7 @@ B<--description> Show a brief description of the grabber.
 
 B<--config-file FILE> Specify the name of the configuration file to use. 
 If not specified, a default of B<~/.xmltv/@@name.conf> is used.  This 
-is the file written by B<--configure> and read when grabbing.
+is also the default file written by B<--configure> and read when grabbing.
 
 B<--output FILE> When grabbing, write output to FILE rather than to standard
 output.
@@ -4445,9 +4680,9 @@ Supported values are 1-15.
 B<--offset N> Start grabbing at today + N days. Supported values are 0-14.
 
 Note that due to the format of the source data, @@name always downloads 
-data for all days and then filters for days specified with --days and 
+data for all available days and then filters for days specified with --days and 
 --offset. Specifying --days and/or --offset in order to speed up downloads or
-reduce data transfer will therefore not work.
+reduce data transfer will therefore have no effect.
 
 B<--quiet> Suppress all progress messages normally written to standard error.
 
@@ -4476,7 +4711,8 @@ the given LINEUP_ID.
 =head1 SOURCE DATA TERMS OF USE
 
 All data is the copyright of the Radio Times and the use of this data is 
-restricted to personal use only. L<http://www.radiotimes.com/>
+restricted to personal use only. Commercial use of this data is forbidden. 
+L<http://www.radiotimes.com/>
 
 In accessing this XML feed, you agree that you will only access its contents 
 for your own personal and non-commercial use and not for any commercial 
@@ -4486,9 +4722,8 @@ including any third-party software applications available to the general public.
 =head1 CHARACTER ENCODING
 
 During configuration, the software asks the user to choose the character
-encoding to be used for output. Current supported encodings are UTF-8 and 
-ISO-8859-1. If any users would like support for other encodings, please contact
-the maintainer.
+encoding to be used for output. Currently supported encodings are UTF-8 and 
+ISO-8859-1.
 
 =head1 TITLE PROCESSING
 
@@ -4504,6 +4739,12 @@ better performance of PVR software which rely on consistent programme data.
 Please be aware that enabling title processing will result in the grabber 
 taking slightly longer to complete its operation due to the extra 
 processing overhead.
+
+N.B. Please note that title updates can clearly alter programme titles near 
+to transmission time, and it is therefore quite possible for PVR schedules 
+to fail if they have been configured using an old title. Whilst care is 
+taken to ensure title updates are made as far ahead of transmission as 
+possible, be aware that last minute updates can occasionally be made.
 
 =head1 REGIONAL CHANNELS
 
@@ -4523,7 +4764,9 @@ TV service platform (Freeview, Freesat, Virgin TV, etc) from a list. Selecting o
 of these entries will filter the channel selection list (shown at the end of 
 the configuration phase) to show only those channels available on the chosen 
 platform. If the user has entered a valid postcode, the channel list will 
-also only include those regional channels available in the user's locality.
+also only include those regional channels available in the user's locality. 
+Again, errors are quite possible, so please report any incorrect 
+channel/platform information.
 
 =head1 ERROR HANDLING
 
@@ -4595,7 +4838,7 @@ tracker at L<http://sourceforge.net/tracker/?group_id=39046&atid=424135>,
 making sure you assign the bug to the @@name category. Please check
 that the bug has not already been reported.
 
-The source data on the Radio Times website is generated daily before 0600. 
+The source data on the Radio Times website is generated daily before 0800. 
 Occasionally the source data may not get recreated, leaving 
 the source files for some (or all) channels empty. Users are encouraged 
 to wait at least 1 day before reporting an issue with missing listings, 
@@ -4612,7 +4855,7 @@ regenerates automatically over the course of the next day, at which point it
 will be possible to run the grabber successfully.
 
 There is an ongoing issue with the Radio Times source data containing
-mis-encoded UTF-8 characters, which we handle automatically in the grabber
+mis-encoded UTF-8 characters, which are handled automatically in the grabber
 and on a case-by-case basis when required. The issue has been reported to 
 the Radio Times.
 

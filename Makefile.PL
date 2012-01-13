@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w
-# $Id: Makefile.PL,v 1.379 2010/11/22 06:04:58 rmeden Exp $
+# $Id: Makefile.PL,v 1.389 2012/01/05 22:49:27 dekarl Exp $
 
 use ExtUtils::MakeMaker;
 use Config;
@@ -68,7 +68,7 @@ GetOptions('strict-deps'  => \$opt_strictdeps,	# be strict about dependencies
 	  );
 
 our $VERSION;
-$VERSION = '0.5.59';
+$VERSION = '0.5.61';
 
 # Fragment of Makefile text to give the directory where files should
 # be installed.  The extra '.' in the middle of the path is to avoid
@@ -268,12 +268,11 @@ END
 my @opt_components
   = (
 
-# Disabled 2010-09-05 doesn't work due to site changes
-#  { name => 'tv_grab_ar',
-#       blurb => 'Grabber for Argentina',
-#       exes => [ 'grab/ar/tv_grab_ar' ],
-#       prereqs => { 'HTML::TreeBuilder' => 0,
-#                    'HTML::Entities'    => 0 } },
+     { name => 'tv_grab_ar',
+       blurb => 'Grabber for Argentina',
+       exes => [ 'grab/ar/tv_grab_ar' ],
+       prereqs => { 'HTML::TreeBuilder' => 0,
+                    'HTML::Entities'    => 0 } },
 
 # Disabled 2006-04-12 since it doesn't provide data anymore.
 #     { name     => 'tv_grab_au',
@@ -468,10 +467,32 @@ my @opt_components
        grab_need_share => [ 'na_icons' ],
      },
 
-     { name => 'tv_grab_fi',
-       blurb => 'Grabber for Finland',
-       exes => [ 'grab/fi/tv_grab_fi' ],
-       prereqs => { 'HTML::TreeBuilder' => 0 } },
+     { name     => 'tv_grab_fi',
+       blurb    => 'Grabber for Finland',
+       exes     => [ 'grab/fi/tv_grab_fi' ],
+       deps     => [
+		     'grab/fi/tv_grab_fi' => [
+					       'grab/fi/tv_grab_fi.pl',
+					       'grab/fi/fi/common.pm',
+					       'grab/fi/fi/day.pm',
+					       'grab/fi/fi/programme.pm',
+					       'grab/fi/fi/programmeStartOnly.pm',
+					       'grab/fi/fi/source/mtv3.pm',
+					       'grab/fi/fi/source/telkku.pm',
+					       'grab/fi/fi/source/telvis.pm',
+					       'grab/fi/fi/source/tvnyt.pm',
+					       'grab/fi/fi/source/yle.pm',
+					     ],
+		   ],
+       pl_files => { 'grab/fi/merge.PL' => 'grab/fi/tv_grab_fi' },
+       to_clean => [ 'grab/fi/tv_grab_fi' ],
+       prereqs  => {
+		    'HTML::Entities'    => 0,
+		    'HTML::TreeBuilder' => 0,
+		    'JSON'              => 0,
+		    'Time::Local'       => 0,
+		   },
+     },
 
      { name     => 'tv_grab_fi_sv',
        blurb    => 'Grabber for Finland (Swedish)',
@@ -614,12 +635,48 @@ my @opt_components
                   },
      },
 
+     { name => 'tv_grab_eu_egon',
+       blurb => 'Grabber for german speaking area (Egon zappt)',
+       exes => [ 'grab/eu_egon/tv_grab_eu_egon' ],
+       pl_files => { 'grab/eu_egon/tv_grab_eu_egon.PL'
+		     => 'grab/eu_egon/tv_grab_eu_egon' },
+       to_clean => [ 'grab/eu_egon/tv_grab_eu_egon' ],
+       deps => [ 'grab/eu_egon/tv_grab_eu_egon'
+		 => [ 'grab/se_swedb/tv_grab_se_swedb.in' ] ],
+       prereqs => { 'XML::LibXML' => 0,
+                    'Compress::Zlib' => 0,
+                    'IO::Stringy' => 0,
+		    'HTTP::Cache::Transparent' => 0,
+                  },
+     },
+
+     { name => 'tv_grab_se_tvzon',
+       blurb => 'Grabber for Sweden (tvzon.se)',
+       exes => [ 'grab/se_tvzon/tv_grab_se_tvzon' ],
+       pl_files => { 'grab/se_tvzon/tv_grab_se_tvzon.PL'
+		     => 'grab/se_tvzon/tv_grab_se_tvzon' },
+       to_clean => [ 'grab/se_tvzon/tv_grab_se_tvzon' ],
+       deps => [ 'grab/se_tvzon/tv_grab_se_tvzon'
+		 => [ 'grab/se_swedb/tv_grab_se_swedb.in' ] ],
+       prereqs => { 'XML::LibXML' => 0,
+                    'Compress::Zlib' => 0,
+                    'IO::Stringy' => 0,
+		    'HTTP::Cache::Transparent' => 0,
+                  },
+     },
+
      { name => 'tv_grab_fr',
        blurb => 'Grabber for France',
        exes => [ 'grab/fr/tv_grab_fr' ],
        prereqs => { 'HTML::Entities' => 1.27,
 		    'HTML::TreeBuilder' => 0 },
      },
+
+     { name => 'tv_grab_fr_kazer',
+       blurb => 'Grabber for France (Kazer)',
+       exes => [ 'grab/fr_kazer/tv_grab_fr_kazer' ],
+       prereqs => { 'IO::Uncompress::Unzip' => 0 },
+       },
 
 #
 # depreciate tv_grab_no as it is no longer supported (per author, cwattengard@gmail.com)
@@ -641,8 +698,7 @@ my @opt_components
      { name => 'tv_grab_pt_meo',
        blurb => 'Grabber for Portugal (MEO)',
        exes => [ 'grab/pt_meo/tv_grab_pt_meo' ],
-       prereqs => { 'CGI' => 0,
-                    'DateTime' => 0,
+       prereqs => { 'DateTime' => 0,
                     'XML::LibXML' => 0,
                     'LWP' => 0,
                   },
@@ -695,30 +751,33 @@ my @opt_components
        exes => [ 'grab/ee/tv_grab_ee' ],
        prereqs => { 'LWP::Simple' => 0 } },
 
-    { name => 'tv_grab_re',
-       blurb => 'Grabber for Reunion Island (France)',
-       exes => [ 'grab/re/tv_grab_re' ],
-       prereqs => { 'HTML::TreeBuilder' => 0 ,
-                    'HTML::Entities'    => 0 } },
+# rmeden 2011-06-12 not working
+#    { name => 'tv_grab_re',
+#       blurb => 'Grabber for Reunion Island (France)',
+#       exes => [ 'grab/re/tv_grab_re' ],
+#       prereqs => { 'HTML::TreeBuilder' => 0 ,
+#                    'HTML::Entities'    => 0 } },
 
 # rmeden 2008-02-13
 # not working due to site changes
 # disabling
-#
 #    { name => 'tv_grab_nc',
 #      blurb => 'Grabber for Nouvelle Caledonie Island (France)',
 #      exes => [ 'grab/nc/tv_grab_nc' ],
 #      prereqs => { 'HTML::TreeBuilder' => 0 ,
 #                   'HTML::Entities'    => 0 } },
 
+# rmeden 2011-06-12 not working
+# dekarl 2012-01-05 fixed by #3163183
      { name => 'tv_grab_na_dtv',
        blurb => 'Grabber for DirecTV in North America',
        exes => [ 'grab/na_dtv/tv_grab_na_dtv' ],
        prereqs => {
-         'WWW::Mechanize' => 0,
-         'HTML::TokeParser' => 0,
-         'Date::Parse' => 0,
-         'Time::Local' => 0
+         'DateTime'                  => 0,
+         'DateTime::Format::ISO8601' => 0,
+         'JSON'                      => 0,
+         'HTML::TokeParser'          => 0,
+         'WWW::Mechanize'            => 0,
        },
      },
 

@@ -60,7 +60,7 @@ with every source of anglophone TV listings.
 =cut
 
 use strict;
-use XMLTV::Version '$Id: tv_extractinfo_en,v 1.67 2010/04/23 01:02:47 knowledgejunkie Exp $ ';
+use XMLTV::Version '$Id: tv_extractinfo_en,v 1.68 2011/05/07 00:21:25 dekarl Exp $ ';
 use XMLTV::Date;
 use Date::Manip; Date_Init('TZ=UTC');
 use Carp;
@@ -1330,6 +1330,7 @@ sub clocks_poss( $ ) {
 	return [0, 0];
     }
     my ($hh, $mm) = ($1, $2);
+    return [0, 0] if $mm > 59;
     return [0, 1] if $hh =~ /^0/;
     return [1, 1] if 1 <= $hh && $hh < 13;
     return [0, 1] if 13 <= $hh && $hh < 24;

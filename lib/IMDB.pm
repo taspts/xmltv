@@ -1,5 +1,5 @@
 #
-# $Id: IMDB.pm,v 1.56 2008/09/25 18:01:01 jveldhuis Exp $
+# $Id: IMDB.pm,v 1.57 2011/06/22 18:58:02 dekarl Exp $
 #
 # The IMDB file contains two packages:
 # 1. XMLTV::IMDB::Cruncher package which parses and manages IMDB "lists" files
@@ -1101,21 +1101,17 @@ sub applyFound($$$)
 	    }
 	}
 
-	# current xmltv 0.5 doens't support more than one star rating,
-	# so we deal with this slightly different
 	if ( $self->{updateStarRatings} && defined($details->{ratingRank}) ) {
 	    if ( $self->{replaceStarRatings} ) {
 		if ( defined($prog->{'star-rating'}) ) {
 		    $self->debug("replacing 'star-rating'");
 		    delete($prog->{'star-rating'});
 		}
-		$prog->{'star-rating'}=["$details->{ratingRank}/10", undef];
+		unshift( @{$prog->{'star-rating'}}, [ $details->{ratingRank} . "/10", 'IMDB User Rating' ] );
 	    }
 	    else {
-		# if a star rating exists, then we leave it in place
-		if ( !defined($prog->{'star-rating'}) ) {
-		    $prog->{'star-rating'}=["$details->{ratingRank}/10", undef];
-		}
+	        # add IMDB User Rating in front of all other star-ratings
+		unshift( @{$prog->{'star-rating'}}, [ $details->{ratingRank} . "/10", 'IMDB User Rating' ] );
 	    }
 	}
     }

@@ -109,10 +109,10 @@ my $ua = LWP::UserAgent->new;
 $ua->agent("xmltv/$XMLTV::VERSION");
 
 # The list of channels available from the Yle Program Guide. Their
-# names are deliberately specified in a manner which would be normal
+# names are deliberately specified in a manner which would be natural
 # for people watching e.g. TV channels from Sweden (so that "TV1"
-# would not necessarily refer to Yle's TV1 channel - thus, the need
-# for the "Yle" prefixing here).
+# would in their mindset not necessarily refer to Yle's TV1 channel -
+# thus, the reason behind the "Yle" prefixing here).
 #
 # The key in this hash is the name of the channel as given on the Yle
 # program guide web page.
@@ -121,12 +121,12 @@ my $channels =
    'tv1.yle.fi' => {
 		    'id' => 'tv1.yle.fi',
 		    'group' => 2,
-		    'display-name' => [[ 'Yle TV1', $LANGUAGE_CODE ]]
+		    'display-name' => [[ 'YLE TV1', $LANGUAGE_CODE ]]
 	    },
    'tv2.yle.fi' => {
 		    'id' => 'tv2.yle.fi',
 		    'group' => 2,
-		    'display-name' => [[ 'Yle TV2', $LANGUAGE_CODE ]]
+		    'display-name' => [[ 'YLE TV2', $LANGUAGE_CODE ]]
 	    },
    'mtv3.yle.fi' => {
 		    'id' => 'mtv3.yle.fi',
@@ -146,7 +146,7 @@ my $channels =
    'fst5.yle.fi' => {
                     'id' => 'fst5.yle.fi',
                     'group' => 2,
-                    'display-name' => [[ 'FST5', $LANGUAGE_CODE ]]
+                    'display-name' => [[ 'YLE FST5', $LANGUAGE_CODE ]]
 	     },
    'subtv.yle.fi' => {
                     'id' => 'subtv.yle.fi',
@@ -195,7 +195,7 @@ my ($opt, $conf) = ParseOptions(
      capabilities => [qw/baseline manualconfig apiconfig/],
      stage_sub => \&config_stage,
      listchannels_sub => \&list_channels,
-     version => '$Id: tv_grab_fi_sv,v 1.9 2010/12/09 20:15:39 perlundberg Exp $',
+     version => '$Id: tv_grab_fi_sv,v 1.11 2011/06/26 09:22:18 perlundberg Exp $',
      description => "Finland (Swedish)",
 });
 
@@ -458,14 +458,15 @@ sub write_listings_data
 		    $program->find('div[@class="description"]')->[0]->childNodes();
 		my $description = "";
 		my $title = "";
+                my $subtitle = "";
 		my $desc_time = "";
-		
+
 		# Loop over the program nodes and grab out the data
 		# from the relevant nodes.
 		foreach my $programNode (@programNodes)
 		{
 		    my $nodeType = ref($programNode);
-			
+
 		    if ($nodeType eq 'XML::LibXML::Text')
 		    {
 		       $description = $programNode->data;
@@ -473,12 +474,25 @@ sub write_listings_data
 		    else
 		    {
 			my $class = $programNode->getAttribute("class");
-			
+
 			if (defined($class))
-			{			
-			    if ($class eq 'desc_title')
+			{
+                            if ($class eq 'desc_title')
 			    {
-				$title = $programNode->to_literal;
+                                # We special-case certain programs to
+                                # be able to get a title +
+                                # subtitle. This makes them much
+                                # easier to record using PVR software
+                                # for example.
+                                if ($programNode->to_literal =~ m/^BUU-klubben: .+$/ ||
+                                    $programNode->to_literal =~ m/^Tintin: .+$/)
+                                {
+                                    ($title, $subtitle) = $programNode->to_literal =~ m/^(.+?): (.+)$/;
+                                }
+                                else
+                                {
+                                    $title = $programNode->to_literal;
+                                }
 			    }
 			    elsif ($class eq 'desc_time')
 			    {
@@ -492,7 +506,7 @@ sub write_listings_data
 			}
 		    }
 		}
-		
+
 		my ($channel_name, $start_time, $end_time) =
 		    ($desc_time) =~ m/^(.+?) (\d{2}\.\d{2}) - (\d{2}\.\d{2})$/;
 
@@ -500,7 +514,7 @@ sub write_listings_data
 		# configured channels.  If it doesn't, ignore
 		# it. (Since the data is provided to us in channel
 		# groups, we cannot do it much better than this.)
-		my $channel_id = $channel_name_map->{$channel_name};		   
+		my $channel_id = $channel_name_map->{$channel_name};
 		unless( exists( $wanted{ $channel_id } ) )
 		{
 		    next;
@@ -515,12 +529,10 @@ sub write_listings_data
 		    'stop' => xmltv_end_time($date, $start_time,
 					$end_time)
 		};
-		
-		if ($description ne '')
-		{
-		    $program->{desc} = [[ $description, $LANGUAGE_CODE ]];
-		}		
-	
+
+                $program->{'desc'} = [[ $description, $LANGUAGE_CODE ]] if ($description ne '');
+                $program->{'sub-title'} = [[ $subtitle, $LANGUAGE_CODE ]] if ($subtitle ne '');
+
 	        # All data has been gathered. We can now write the
 	        # program element to the output. (This could be
 	        # changed into a "two-pass" operation if wanted, so

@@ -1,6 +1,6 @@
 #!perl -w
 #
-# $Id: exe_opt.pl,v 1.19 2010/11/21 18:10:23 rmeden Exp $
+# $Id: exe_opt.pl,v 1.20 2011/08/30 17:16:48 rmeden Exp $
 #
 # This is a simple script to generate options so PerlApp can make the EXE
 # it needs time values, so might as well put it in a perl script!
@@ -23,6 +23,7 @@ print '-nologo
 -add "DateTime::Locale::en_US"
 -add "DateTime::TimeZone::Europe::Copenhagen"
 -add "DateTime::TimeZone::Europe::Helsinki"
+-add "DateTime::TimeZone::Europe::Lisbon"
 -add "DateTime::TimeZone::Asia::Jerusalem"
 -add "DateTime::TimeZone::Asia::Kolkata"
 -add="Tk::ProgressBar"

@@ -2,7 +2,7 @@
 # vi:noet:ts=4
 
 #-------------------------------------------------------------------------------
-# $Id: tv_grab_huro.in,v 1.44 2010/12/10 18:58:59 dekarl Exp $
+# $Id: tv_grab_huro.in,v 1.47 2011/07/28 09:01:54 attila_nagy Exp $
 #-------------------------------------------------------------------------------
 
 #-------------------------------------------------------------------------------
@@ -122,7 +122,7 @@ recommended by the XMLTV DTD.
 #-------------------------------------------------------------------------------
 
 use strict;
-use XMLTV::Version '$Id: tv_grab_huro.in,v 1.44 2010/12/10 18:58:59 dekarl Exp $';
+use XMLTV::Version '$Id: tv_grab_huro.in,v 1.47 2011/07/28 09:01:54 attila_nagy Exp $';
 use XMLTV::Capabilities qw/baseline manualconfig cache/;
 use XMLTV::Description 'Hungary/Romania';
 use XMLTV::Supplement qw/GetSupplement/;
@@ -338,7 +338,7 @@ sub process_table( $$$$ ) {
 		$data =~ s|<span class=\"spons_link.*?</span>||g;
 		$data =~ s|<div style=\"display:none\">.*?</div>||g;
 		# strip links to divido.hu
-		$data =~ s|<a class=\"navs.*?</a>||g;
+		$data =~ s|<a onclick=\"loggin.*?</a>||g;
 
 		$tree = HTML::TreeBuilder->new_from_content($data) or 
 			die "could not fetch/parse $url (progamtable)\n";
@@ -546,7 +546,7 @@ sub process_table( $$$$ ) {
 		# New type of row: contains only the time of the event
 		# but not the actual program data. So in this case we try to
 		# jump to the next row
-		if (! $row->attr("class") || (not $row->attr("class") =~ /^event_/ )) {
+		if (! $row->attr("class") || (not $row->attr("class") =~ /[\s]*event_/ )) {
 			t "found line without event, the time is: $lasttimeHHMM";
 		 	next;
 		}
@@ -1511,7 +1511,8 @@ sub showworkers() {
 # returns	: integer
 #-------------------------------------------------------------------------------
 sub arabic( $ ) {
-	my ($n, $d, $_) = (1, 2, @_);
+	my ($n, $d);
+	($n, $d, $_) = (1, 2, @_);
 	$_ = uc $_ if !/[^a-z]/;
 	for my $v(split//, 'IVXLCDM') {
 		s/\+.*$v/)/;

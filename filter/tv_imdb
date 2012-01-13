@@ -150,7 +150,7 @@ Jerry Veldhuis, jerry@matilda.com
 =cut
 
 use strict;
-use XMLTV::Version '$Id: tv_imdb,v 1.23 2004/03/22 22:01:14 epaepa Exp $ ';
+use XMLTV::Version '$Id: tv_imdb,v 1.24 2011/06/22 19:07:07 dekarl Exp $ ';
 use Data::Dumper;
 use Getopt::Long;
 
@@ -313,7 +313,10 @@ sub programme_cb( $ ) {
 XMLTV::parsefiles_callback(\&encoding_cb, \&credits_cb,
 			   \&channel_cb, \&programme_cb,
 			   @ARGV);
-$w->end();
+# we only get a Writer if the encoding callback gets called
+if ( $w ) {
+    $w->end();
+}
 
 if ( $opt_stats ) {
     print STDERR $imdb->getStatsLines($numberOfSeenChannels);

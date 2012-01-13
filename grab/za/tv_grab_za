@@ -70,7 +70,7 @@ Does not automatically update itself, when DSTV changes their site
 
 use strict;
 
-use XMLTV::Version '$Id: tv_grab_za,v 1.41 2010/11/15 19:39:32 dekarl Exp $ ';
+use XMLTV::Version '$Id: tv_grab_za,v 1.42 2011/05/12 07:05:51 dekarl Exp $ ';
 use XMLTV::Capabilities qw/baseline manualconfig cache/;
 use XMLTV::Description 'South Africa';
 
@@ -410,16 +410,16 @@ sub dstv_channel_uri( $ ) {
 # Returns the option ID on the DSTV site for a given channel name
 sub dstv_channel_map ($) {
 	my $ch = shift;
-	if (!defined %dstvchannelmap) {
-		get_dstv_channel_mappings()	;
+	if (!%dstvchannelmap) {
+		get_dstv_channel_mappings();
 	}
 	return $dstvchannelmap{$ch};
 }
 
 sub mnet_channel_map ($) {
 	my $ch = shift;
-	if (!defined %mnetchannelmap) {
-		get_mnet_channel_mappings()	;
+	if (!%mnetchannelmap) {
+		get_mnet_channel_mappings();
 	}
 	return $mnetchannelmap{$ch};
 }

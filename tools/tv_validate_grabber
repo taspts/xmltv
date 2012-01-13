@@ -1,0 +1,158 @@
+#!/usr/bin/perl -w
+
+use strict;
+
+use XMLTV::Version '$Id: tv_validate_grabber.in,v 1.4 2010/09/02 05:07:40 rmeden Exp $';
+use XMLTV::ValidateFile qw/LoadDtd/;
+use XMLTV::ValidateGrabber qw/ValidateGrabber ConfigureGrabber/;
+
+use File::Temp qw/tmpnam/;
+use Getopt::Long;
+
+=pod
+
+=head1 NAME
+
+tv_validate_grabber - Validate that an xmltv grabber works correctly
+
+=head1 SYNOPSIS
+
+tv_validate_grabber --help
+
+tv_validate_grabber [--config-file <configfile>] [--keep-files] <cmd>
+
+=head1 DESCRIPTION
+
+tv_validate_grabber runs a grabber through a series of test to determine
+if it follows the recommendations described at 
+L<http://wiki.xmltv.org/index.php/XmltvCapabilities>
+
+tv_validate_grabber does not assume that the grabber is written in perl.
+The command does not have to be a single executable, it can also be a complete
+command-line:
+
+tv_validate_grabber "perl -I lib grab/new/tv_grab_new"
+
+=head1 OPTIONS
+
+B<--config-file <configfile>> Use the specified file as configuration file
+for the grabber. If the file does not exist,
+the grabber is run with --configure to 
+create it. Default is to always run the grabber
+with --configure first and store the configuration
+in a temporary file.
+
+B<--keep-files> Do not delete the output-files generated during
+the validation. 
+
+
+=head1 AUTHOR
+
+Mattias Holmlund, mattias -at- holmlund -dot- se. 
+
+=cut
+
+my $opt = { "dtd-file" => undef,
+            "config-file" => undef,
+	    "keep-files" => 0,
+            help => 0,
+          };
+
+my $res = GetOptions( $opt, qw/
+                      dtd-file=s
+                      config-file=s
+                      keep-files
+                      help|h
+                      / );
+
+if( (not $res) or $opt->{help} or scalar( @ARGV ) != 1 ) {
+    print << "EOHELP";
+Usage: $0 [options] <grabbercommand>
+
+EOHELP
+
+    exit 1;
+}
+
+my( $cmd ) = @ARGV;
+
+my $opdir  = tmpnam();
+mkdir $opdir;
+
+my $cfg;
+if (defined( $opt->{'config-file'} )) {
+    $cfg = $opt->{'config-file'};
+}
+else {
+    $cfg = "$opdir/conf";
+}
+
+if( not -e $cfg ) {
+    ConfigureGrabber( $cmd, $cfg );
+}
+
+if( defined( $opt->{'dtd-file'}) ) {
+    if (not LoadDtd( $opt->{'dtd-file'} )) {
+        print STDERR "Failed to load dtd from $opt->{'dtd-file'}.\n" .
+          "Use the --dtd-file option to specify another path to the dtd.\n";
+    exit 1;
+  }
+}
+
+my $errors = ValidateGrabber( "Grabber", $cmd, $cfg, "$opdir/t_", undef, 0 );
+
+if ($opt->{'keep-files'}) {
+    print "Saving output files in $opdir\n";
+}
+else {
+    unlink <$opdir/t_*>;
+    unlink "$opdir/conf";
+    rmdir $opdir;
+}
+
+if ($errors) {
+    print "$errors errors found.\n";
+    exit 1;
+} 
+else {
+    print "Validated ok.\n";
+    exit 0;
+}
+   
+=head1 COPYRIGHT
+
+Copyright (C) 2005 Mattias Holmlund.
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+=cut
+
+### Setup indentation in Emacs
+## Local Variables:
+## perl-indent-level: 4
+## perl-continued-statement-offset: 4
+## perl-continued-brace-offset: 0
+## perl-brace-offset: -4
+## perl-brace-imaginary-offset: 0
+## perl-label-offset: -2
+## cperl-indent-level: 4
+## cperl-brace-offset: 0
+## cperl-continued-brace-offset: 0
+## cperl-label-offset: -2
+## cperl-extra-newline-before-brace: t
+## cperl-merge-trailing-else: nil
+## cperl-continued-statement-offset: 2
+## indent-tabs-mode: t
+## End:

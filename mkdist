@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 #
-# $Id: mkdist,v 1.54 2009/08/10 06:29:13 rmeden Exp $
+# $Id: mkdist,v 1.55 2011/06/21 04:20:33 rmeden Exp $
 #
 # This script is meant to be run in an empty directory, although
 # it doesn't require it.
@@ -237,9 +237,10 @@ unlink("xmltv/ChangeLog");
 do_system("tar xpf save.tar");
 unlink("save.tar");
 
-print "\nuploading $filename to frs.sourceforge.net..\n";
+print "\nuploading $ENV{PWD} $filename to frs.sourceforge.net..\n";
 print "scp $filename  $opt_sfuser,xmltv\@frs.sourceforge.net:/home/frs/project/x/xm/xmltv/xmltv/$opt_version/\n";
 do_system("scp $filename  $opt_sfuser,xmltv\@frs.sourceforge.net:/home/frs/project/x/xm/xmltv/xmltv/$opt_version/");
+do_system("cd xmltv; scp README $opt_sfuser,xmltv\@frs.sourceforge.net:/home/frs/project/x/xm/xmltv/xmltv/$opt_version/");
 
 print <<END
 **** File $filename uploaded to upload.sourceforge.net

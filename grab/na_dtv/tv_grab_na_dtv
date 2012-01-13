@@ -96,8 +96,6 @@ use XMLTV::Options qw/ParseOptions/;
 use WWW::Mechanize;
 use HTML::TokeParser;
 use DateTime;
-use DateTime::Format::ISO8601;
-use DateTime::Format::XMLTV;
 use JSON;
 use Errno qw(EAGAIN);
 
@@ -323,7 +321,7 @@ sub prepare_queue {
       stage_sub        => \&config_stage,
       listchannels_sub => \&list_channels,
       version =>
-        '$Id: tv_grab_na_dtv,v 1.16 2008/12/09 15:48:50 sunsetsystems Exp $',
+        '$Id: tv_grab_na_dtv,v 1.19 2012/01/08 13:54:00 alewando Exp $',
       description => "North America using www.directv.com",
     }
   );
@@ -352,11 +350,9 @@ sub prepare_queue {
   # to a temporary file. This file will later be read by child processes.
   my $startDate = DateTime->now;
   $startDate->set_time_zone($timeZone);
-  print STDERR "Now is $startDate\n";
 
   # Add offset to start date
   $startDate -> add(days => $opt->{offset});
-  print STDERR "Start date is $startDate\n";
 
   open $fhq, "> $queue_filename";
   binmode $fhq;
@@ -400,10 +396,10 @@ sub scrape_channel_list {
   # Set zipcode (start session)
   my $setZipUrl = "${SITEBASE}/lightbox/lightboxZipCode.jsp?_DARGS=/entertainment/lightbox/component/lightboxZipCodeComponent.jsp"; 
   my %params = ( "/directv/eportal/formhandler/EportalProfileFormHandler.profileUpdateForm.zipCode" => "$zip" );
-  print STDERR "Setting zip code\n" if ($VERBOSE);
+  print STDERR "Setting zip code\n" if ($DEBUG);
   $browser->post( $setZipUrl, Content => \%params );
 
-  print STDERR "Getting channel list\n" if ($VERBOSE);
+  print STDERR "Getting channel list\n" if ($DEBUG);
   my $listUrl = $CHANNEL_LIST_URL . "?hideDupes=true&view=ALL&zipcode=${zip}";
   $browser->get($listUrl);
   my $json = $browser->content();
@@ -566,12 +562,36 @@ sub child_logic {
   return 0;
 }
 
+# Parse a date from DirecTV (in ISO-8601 format)
+sub parseDate {
+  my ($input) = @_;
+  # Format 2012-01-09T04:00:00.000+0000
+  my ($y,$m, $d, $h, $min, $s, $z) = $input =~ /(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})\.\d{3}([+-]\d+)/;
+  my $date = DateTime->new(
+        year       => $y,
+        month      => $m,
+        day        => $d,
+        hour       => $h,
+        minute     => $min,
+        second     => $s,
+        nanosecond => 0,
+        time_zone  => $z,
+    );
+    $date->set_time_zone($timeZone);
+    return $date;
+}
+
+sub printDate {
+  my ($dt) = @_;
+  #Format 20120109233500 -0500
+  my $str = $dt->strftime("%Y%m%d%H%M%S ") . DateTime::TimeZone->offset_as_string($dt->offset);
+  return $str;
+}
+
 # Check that the start date is on the requested day (after adjusting to the specified timezone) 
 sub checkStartDate {
- my ($day, $startDate) = @_;
- my $startDt = DateTime::Format::ISO8601->parse_datetime($startDate);
- $startDt->set_time_zone($timeZone);
- my $cmpDay = substr($startDt, 0, 10);
+ my ($day, $startDt) = @_;
+ my $cmpDay = $startDt->ymd;
  return $cmpDay eq $day;
 }
 
@@ -611,7 +631,9 @@ sub scrape_channel_day {
     my @schedules = @{ @{ $data->{channels} }[0]->{schedules} };
     foreach my $prog (@schedules) {
 	    # Skip if program does not start on the target date (ie: started the previous day)
-	    if (!checkStartDate($day, $prog->{prAir})) {
+	    my $startDate = parseDate($prog->{prAir});
+	    $prog->{startDt} = $startDate;
+	    if (!checkStartDate($day, $startDate)) {
 	      print STDERR "Skipping program $prog->{prId} because it doesn't start on $day: $prog->{prAir}\n" if ($DEBUG);
 	      next;
 	    }  
@@ -643,9 +665,7 @@ sub scrape_program_details {
   my $channel_id = &rfc2838($channel_number);
 
   # Calculate stop time
-  my $startDate = DateTime::Format::ISO8601->parse_datetime($start);
-  $startDate->set_formatter(DateTime::Format::XMLTV->new());
-  $startDate->set_time_zone($timeZone); # Output times with local timezone
+  my $startDate = $program_data->{startDt};
   my $stopDate = $startDate->clone();
   $stopDate->add(minutes => $length);
 
@@ -756,9 +776,12 @@ OUTER: while ( my $tag = $parser->get_tag( "li", "span" ) ) {
   # when the files from the children are merged.
   $xml .= "$channel_number $startDate\n";
 
+  my $startXMLTV = $startDate->strftime ('%Y%m%d%H%M%S %z');
+  my $stopXMLTV = $stopDate->strftime ('%Y%m%d%H%M%S %z');
+
   # Program XML
-  $xml .= "<programme start=\"${startDate}\" ";
-  $xml .= "stop=\"${stopDate}\" channel=\"" . $channel_id . "\">\n";
+  $xml .= "<programme start=\"" . printDate(${startDate}) . "\" ";
+  $xml .= "stop=\"" . printDate(${stopDate}) . "\" channel=\"" . $channel_id . "\">\n";
   $xml .= "  <title lang=\"en\">$title</title>\n" if $title;
   $xml .= "  <sub-title lang=\"en\">$subtitle</sub-title>\n" if $subtitle;
   $xml .= "  <desc lang=\"en\">" . xmltr($xml_desc) . "</desc>\n" if $xml_desc;
@@ -789,6 +812,5 @@ OUTER: while ( my $tag = $parser->get_tag( "li", "span" ) ) {
 
   $xml .= "</programme>\n";
 
-  #print STDERR "\n\n$xml\n" if ($DEBUG);
   return $xml;
 }

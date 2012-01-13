@@ -98,10 +98,8 @@ None known.
 =cut
 
 use strict;
-use CGI; # FIXME rewrite URL escaping to avoid a new dependency for XMLTV
 use DateTime;
 use Encode; # used to convert 'perl strings' into 'utf-8 strings'
-#use HTTP::Cache::Transparent;
 use XML::LibXML;
 use XMLTV::Configure::Writer;
 use XMLTV::Get_nice qw/get_nice/;
@@ -114,7 +112,7 @@ my( $opt, $conf ) = ParseOptions( {
     capabilities => [qw/apiconfig baseline manualconfig preferredmethod/],
     listchannels_sub => \&list_channels,
     stage_sub => \&config_stage,
-    version => '$Id: tv_grab_pt_meo,v 1.4 2010/12/10 18:48:30 dekarl Exp $',
+    version => '$Id: tv_grab_pt_meo,v 1.6 2011/10/26 08:02:03 dekarl Exp $',
     description => "Portugal (MEO)",
     preferredmethod => 'allatonce',
     defaults => { days => $maxdays, offset => 0, quiet => 0, debug => 0 },
@@ -139,10 +137,13 @@ $startDate->add( days => $opt->{offset} );
 my $endDate=$startDate->clone()->add( days => $opt->{days} );
 $endDate->add( seconds => -1 );
 
+my $requestCallsigns = join( ',', @{$conf->{channel}} );
+$requestCallsigns =~ s/([^A-Za-z0-9,])/sprintf("%%%02X", ord($1))/seg;
+
 my $request = 'http://services.sapo.pt/EPG/GetChannelListByDateInterval';
-$request .= '?channelSiglas=' . CGI::escape( join( ',', @{$conf->{channel}} ) );
-$request .= '&startDate=' . $startDate->ymd('-') . '%20' . $startDate->hms(':');
-$request .= '&endDate=' . $endDate->ymd('-') . '%20' . $endDate->hms(':');
+$request .= '?channelSiglas=' . $requestCallsigns;
+$request .= '&startDate=' . $startDate->ymd('-') . ' ' . $startDate->hms(':');
+$request .= '&endDate=' . $endDate->ymd('-') . ' ' . $endDate->hms(':');
 
 my $xpc = XML::LibXML::XPathContext->new;
 $xpc->registerNs('EPG', 'http://services.sapo.pt/Metadata/EPG');
@@ -173,7 +174,7 @@ my %w_args = (
 
 my $writer = new XMLTV::Writer( %w_args );
 $writer->start({
-    'generator-info-name' => 'XMLTV/$Id: tv_grab_pt_meo,v 1.4 2010/12/10 18:48:30 dekarl Exp $',
+    'generator-info-name' => 'XMLTV/$Id: tv_grab_pt_meo,v 1.6 2011/10/26 08:02:03 dekarl Exp $',
     'generator-info-url' => 'http://www.xmltv.org/',
     'source-info-name' => 'SAPO EPG Service for MEO',
     'source-info-url' => 'http://services.sapo.pt/Metadata/Service/EPG?culture=EN',
@@ -189,6 +190,8 @@ foreach my $channel ($channels->get_nodelist()) {
     $writer->write_channel(\%ch);
 }
 
+my $lastchanid;
+my $lastend;
 my $inprogs = $xpc->findnodes( '//EPG:Program', $epg );
 foreach my $inprog ($inprogs->get_nodelist()) {
     my %prog;
@@ -203,12 +206,21 @@ foreach my $inprog ($inprogs->get_nodelist()) {
     my $desc = $xpc->findvalue( 'EPG:Description', $inprog );
     $prog{desc} = [ [ encode( 'UTF-8', $desc ), 'pt' ] ];
 
-    my $starttime = $xpc->findvalue( 'EPG:StartTime', $inprog );
-    my $dtstart = dt_from_string( $starttime );
+    my $dtstart;
+    if( !defined( $lastchanid )||( $lastchanid ne $chanid ) ){
+      my $starttime = $xpc->findvalue( 'EPG:StartTime', $inprog );
+      $dtstart = dt_from_string( $starttime );
+    }else{
+      $dtstart = $lastend;
+    }
     $prog{start} = $dtstart->strftime( '%Y%m%d%H%M%S %z' );
 
-    my $endtime = $xpc->findvalue( 'EPG:EndTime', $inprog );
-    my $dtstop = dt_from_string( $endtime );
+#    my $endtime = $xpc->findvalue( 'EPG:EndTime', $inprog );
+#    my $dtstop = dt_from_string( $endtime );
+    my $duration = $xpc->findvalue( 'EPG:Duration', $inprog );
+    my $dtstop = $dtstart->clone()->add( seconds => $duration );
+    $lastchanid = $chanid;
+    $lastend = $dtstop;
     $prog{stop} = $dtstop->strftime( '%Y%m%d%H%M%S %z' );
 
     $writer->write_programme(\%prog);

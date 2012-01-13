@@ -1,6 +1,6 @@
 # utf8_fixups
 #
-# $Id: utf8_fixups,v 1.71 2010/12/19 05:08:10 knowledgejunkie Exp $
+# $Id: utf8_fixups,v 1.78 2011/09/30 23:03:13 knowledgejunkie Exp $
 #
 # This file contains fixups for mis-encoded UTF-8 characters that are 
 # frequently seen in the source data from the Radio Times.
@@ -24,6 +24,9 @@
 #
 # A useful reference for the correct UTF-8 encodings of all Unicode characters
 # is at http://www.eki.ee/letter/
+#
+# Details of Windows-1252 encodings (for determining section 3 corrections) can be 
+# found at http://en.wikipedia.org/wiki/Windows-1252.
 #
 ################################################################################
 #
@@ -255,12 +258,31 @@
 #
 # 3) UTF-8 characters seen in the raw data as bytes in the range [C2][80-9F]
 # which should represent a single printing character but UTF-8 decode as 
-# non-printing control characters.
+# non-printing control characters. These are most likely Windows-1252 chars
+# that have been encoded to UTF-8 incorrectly.
 #
 #
-# "'"
-\xC2\x91|\x27
-# "'"
-\xC2\x92|\x27
-# "£" - seen in listings for Home (2010-12-16)
+# Euro symbol (Windows-1252) seen in listings for Home (2010-12-16). Substitute Pound Sterling symbol
 \xC2\x80|\xC2\xA3
+# Ellipsis char (Windows-1252). Substitute three periods, rather than ellipsis
+\xC2\x85|\x2E\x2E\x2E
+# Curved single left quote (Windows-1252)
+\xC2\x91|\x27
+# Curved single right quote (Windows-1252)
+\xC2\x92|\x27
+# Curved double left quote (Windows-1252)
+\xC2\x93|\x22
+# Curved double right quote (Windows-1252)
+\xC2\x94|\x22
+# Dash-space (Windows-1252) replaced with colon-space
+\xC2\x96\x20|\x3A\x20
+#
+# Misencoded single right quote seen in listings for BBC News (2011-02-20)
+# \x9D does not map to any char in Windows-1252
+\xC2\x9D|\x27
+#
+# FIXME: current rev of grabber does not permit empty replacement field
+#
+# Extraneous bullet char (Windows-1252) appearing at start of desc field in 
+# Sky Living Loves listings for Will & Grace S03E10 "??Paul"
+\xC2\x95\x50\x61\x75\x6C|\x50\x61\x75\x6C
