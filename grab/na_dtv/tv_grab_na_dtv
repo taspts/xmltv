@@ -656,6 +656,12 @@ sub scrape_program_details {
   my $length     = $program_data->{prLen};
   my $hd         = $program_data->{prHd};
 
+  if(!$program_id) {
+    print STDERR "No Program ID for title $title\n" if ($DEBUG);
+    # Can't scrape details, so don't return any program XML 
+    return "";
+  } 
+
   # Append '-1' to channel number if this is an HD broadcast on a dual-numbered channel
   # This is how the channel is entered mannualy on the receiver
   if($ch{$channel_number}->{dual} && $hd) {
