@@ -1,7 +1,7 @@
 # This Makefile is for the XMLTV extension to perl.
 #
 # It was generated automatically by MakeMaker version
-# 6.55_02 (Revision: 65502) from the contents of
+# 6.57_05 (Revision: 65705) from the contents of
 # Makefile.PL. Don't edit this file, edit Makefile.PL instead.
 #
 #       ANY CHANGES MADE HERE WILL BE LOST!
@@ -12,18 +12,18 @@
 #   MakeMaker Parameters:
 
 #     BUILD_REQUIRES => {  }
-#     EXE_FILES => [q[filter/tv_extractinfo_en], q[filter/tv_extractinfo_ar], q[filter/tv_grep], q[filter/tv_sort], q[filter/tv_to_latex], q[filter/tv_to_text], q[filter/tv_to_potatoe], q[filter/tv_cat], q[filter/tv_split], q[filter/tv_imdb], q[filter/tv_remove_some_overlapping], q[tools/tv_validate_grabber], q[tools/tv_validate_file], q[tools/tv_find_grabbers], q[grab/na_dd/tv_grab_na_dd], q[grab/na_icons/tv_grab_na_icons], q[grab/combiner/tv_grab_combiner], q[grab/na_dtv/tv_grab_na_dtv]]
+#     EXE_FILES => [q[filter/tv_extractinfo_en], q[filter/tv_extractinfo_ar], q[filter/tv_grep], q[filter/tv_sort], q[filter/tv_to_latex], q[filter/tv_to_text], q[filter/tv_to_potatoe], q[filter/tv_cat], q[filter/tv_split], q[filter/tv_imdb], q[filter/tv_remove_some_overlapping], q[tools/tv_validate_grabber], q[tools/tv_validate_file], q[tools/tv_find_grabbers], q[grab/ar/tv_grab_ar], q[grab/ch_search/tv_grab_ch_search], q[grab/dtv_la/tv_grab_dtv_la], q[grab/uk_bleb/tv_grab_uk_bleb], q[grab/it/tv_grab_it], q[grab/in/tv_grab_in], q[grab/na_dd/tv_grab_na_dd], q[grab/na_icons/tv_grab_na_icons], q[grab/fi/tv_grab_fi], q[grab/fi_sv/tv_grab_fi_sv], q[grab/il/tv_grab_il], q[grab/es_laguiatv/tv_grab_es_laguiatv], q[grab/es_miguiatv/tv_grab_es_miguiatv], q[grab/nl/tv_grab_nl], q[grab/huro/tv_grab_huro], q[grab/fr/tv_grab_fr], q[grab/fr_kazer/tv_grab_fr_kazer], q[grab/pt/tv_grab_pt], q[grab/pt_meo/tv_grab_pt_meo], q[grab/za/tv_grab_za], q[grab/eu_epgdata/tv_grab_eu_epgdata], q[grab/combiner/tv_grab_combiner], q[grab/ee/tv_grab_ee], q[grab/na_dtv/tv_grab_na_dtv]]
 #     NAME => q[XMLTV]
-#     PL_FILES => { tools/tv_validate_grabber.PL=>q[tools/tv_validate_grabber], filter/tv_grep.PL=>q[filter/tv_grep], lib/Lineup.pm.PL=>q[lib/Lineup.pm], grab/na_icons/tv_grab_na_icons.PL=>q[grab/na_icons/tv_grab_na_icons], lib/Supplement.pm.PL=>q[lib/Supplement.pm], grab/na_dd/tv_grab_na_dd.PL=>q[grab/na_dd/tv_grab_na_dd], lib/XMLTV.pm.PL=>q[lib/XMLTV.pm], tools/tv_validate_file.PL=>q[tools/tv_validate_file] }
+#     PL_FILES => { filter/tv_grep.PL=>q[filter/tv_grep], tools/tv_validate_grabber.PL=>q[tools/tv_validate_grabber], grab/it/tv_grab_it.PL=>q[grab/it/tv_grab_it], lib/Lineup.pm.PL=>q[lib/Lineup.pm], grab/na_icons/tv_grab_na_icons.PL=>q[grab/na_icons/tv_grab_na_icons], lib/Supplement.pm.PL=>q[lib/Supplement.pm], grab/uk_bleb/tv_grab_uk_bleb.PL=>q[grab/uk_bleb/tv_grab_uk_bleb], grab/fi/merge.PL=>q[grab/fi/tv_grab_fi], grab/na_dd/tv_grab_na_dd.PL=>q[grab/na_dd/tv_grab_na_dd], lib/XMLTV.pm.PL=>q[lib/XMLTV.pm], grab/ch_search/tv_grab_ch_search.PL=>q[grab/ch_search/tv_grab_ch_search], tools/tv_validate_file.PL=>q[tools/tv_validate_file], grab/huro/tv_grab_huro.PL=>q[grab/huro/tv_grab_huro] }
 #     PM => { grab/Get_nice.pm=>q[$(INST_LIBDIR)/XMLTV/Get_nice.pm], lib/ProgressBar/Tk.pm=>q[$(INST_LIBDIR)/XMLTV/ProgressBar/Tk.pm], lib/ProgressBar/None.pm=>q[$(INST_LIBDIR)/XMLTV/ProgressBar/None.pm], lib/TZ.pm=>q[$(INST_LIBDIR)/XMLTV/TZ.pm], lib/Summarize.pm=>q[$(INST_LIBDIR)/XMLTV/Summarize.pm], lib/IMDB.pm=>q[$(INST_LIBDIR)/XMLTV/IMDB.pm], lib/Usage.pm=>q[$(INST_LIBDIR)/XMLTV/Usage.pm], lib/XMLTV.pm=>q[$(INST_LIBDIR)/XMLTV.pm], grab/Memoize.pm=>q[$(INST_LIBDIR)/XMLTV/Memoize.pm], lib/ValidateFile.pm=>q[$(INST_LIBDIR)/XMLTV/ValidateFile.pm], lib/GUI.pm=>q[$(INST_LIBDIR)/XMLTV/GUI.pm], filter/Grep.pm=>q[$(INST_LIBDIR)/XMLTV/Grep.pm], lib/Configure/Writer.pm=>q[$(INST_LIBDIR)/XMLTV/Configure/Writer.pm], lib/Ask/Term.pm=>q[$(INST_LIBDIR)/XMLTV/Ask/Term.pm], lib/Description.pm=>q[$(INST_LIBDIR)/XMLTV/Description.pm], lib/Gunzip.pm=>q[$(INST_LIBDIR)/XMLTV/Gunzip.pm], lib/Version.pm=>q[$(INST_LIBDIR)/XMLTV/Version.pm], lib/ProgressBar/Term.pm=>q[$(INST_LIBDIR)/XMLTV/ProgressBar/Term.pm], grab/Mode.pm=>q[$(INST_LIBDIR)/XMLTV/Mode.pm], lib/ProgressBar.pm=>q[$(INST_LIBDIR)/XMLTV/ProgressBar.pm], grab/Config_file.pm=>q[$(INST_LIBDIR)/XMLTV/Config_file.pm], lib/Ask/Tk.pm=>q[$(INST_LIBDIR)/XMLTV/Ask/Tk.pm], lib/Clumps.pm=>q[$(INST_LIBDIR)/XMLTV/Clumps.pm], lib/Configure.pm=>q[$(INST_LIBDIR)/XMLTV/Configure.pm], grab/DST.pm=>q[$(INST_LIBDIR)/XMLTV/DST.pm], lib/ValidateGrabber.pm=>q[$(INST_LIBDIR)/XMLTV/ValidateGrabber.pm], lib/PreferredMethod.pm=>q[$(INST_LIBDIR)/XMLTV/PreferredMethod.pm], lib/Date.pm=>q[$(INST_LIBDIR)/XMLTV/Date.pm], lib/Options.pm=>q[$(INST_LIBDIR)/XMLTV/Options.pm], lib/Ask.pm=>q[$(INST_LIBDIR)/XMLTV/Ask.pm], grab/Grab_XML.pm=>q[$(INST_LIBDIR)/XMLTV/Grab_XML.pm], lib/Supplement.pm=>q[$(INST_LIBDIR)/XMLTV/Supplement.pm], lib/Capabilities.pm=>q[$(INST_LIBDIR)/XMLTV/Capabilities.pm], lib/Lineup.pm=>q[$(INST_LIBDIR)/XMLTV/Lineup.pm] }
-#     PREREQ_PM => { Memoize=>q[0], Storable=>q[2.04], HTML::TreeBuilder=>q[0], SOAP::Lite=>q[0.67], HTML::TokeParser=>q[0], Time::Local=>q[0], Term::ReadKey=>q[0], XML::Parser=>q[2.34], File::Slurp=>q[0], XML::Twig=>q[3.28], WWW::Mechanize=>q[0], Date::Parse=>q[0], XML::Writer=>q[0.6], XML::LibXML=>q[0], Date::Manip=>q[5.42], LWP=>q[5.65] }
+#     PREREQ_PM => { DateTime=>q[0], DateTime::Format::ISO8601=>q[0], IO::Stringy=>q[0], IO::Scalar=>q[0], Archive::Zip=>q[0], Memoize=>q[0], Storable=>q[2.04], HTML::TreeBuilder=>q[0], DateTime::Format::Strptime=>q[0], CGI=>q[0], SOAP::Lite=>q[0.67], HTML::TokeParser=>q[0], HTML::Entities=>q[0], Time::Local=>q[0], Term::ReadKey=>q[0], XML::Parser=>q[2.34], LWP::Simple=>q[0], File::Slurp=>q[0], HTML::Form=>q[0], XML::Twig=>q[0], WWW::Mechanize=>q[0], XML::Writer=>q[0.6], File::Temp=>q[0], XML::LibXML=>q[0], IO::Uncompress::Unzip=>q[0], JSON=>q[0], Date::Manip=>q[5.42], LWP=>q[0] }
 
 # --- MakeMaker post_initialize section:
 
 
 # --- MakeMaker const_config section:
 
-# These definitions are from config.sh (via /usr/lib/perl/5.10/Config.pm).
+# These definitions are from config.sh (via /usr/lib/perl/5.14/Config.pm).
 # They may have been overridden via Makefile.PL or on the command line.
 AR = ar
 CC = cc
@@ -34,16 +34,16 @@ DLSRC = dl_dlopen.xs
 EXE_EXT = 
 FULL_AR = /usr/bin/ar
 LD = cc
-LDDLFLAGS = -shared -O2 -g -L/usr/local/lib -fstack-protector
+LDDLFLAGS = -shared -L/usr/local/lib -fstack-protector
 LDFLAGS =  -fstack-protector -L/usr/local/lib
-LIBC = /lib/libc-2.11.2.so
+LIBC = 
 LIB_EXT = .a
 OBJ_EXT = .o
 OSNAME = linux
 OSVERS = 2.6.32-5-amd64
 RANLIB = :
-SITELIBEXP = /usr/local/share/perl/5.10.1
-SITEARCHEXP = /usr/local/lib/perl/5.10.1
+SITELIBEXP = /usr/local/share/perl/5.14.2
+SITEARCHEXP = /usr/local/lib/perl/5.14.2
 SO = so
 VENDORARCHEXP = /usr/lib/perl5
 VENDORLIBEXP = /usr/share/perl5
@@ -76,15 +76,15 @@ PREFIX = /usr
 PERLPREFIX = $(PREFIX)
 SITEPREFIX = $(PREFIX)/local
 VENDORPREFIX = $(PREFIX)
-INSTALLPRIVLIB = $(PERLPREFIX)/share/perl/5.10
+INSTALLPRIVLIB = $(PERLPREFIX)/share/perl/5.14
 DESTINSTALLPRIVLIB = $(DESTDIR)$(INSTALLPRIVLIB)
-INSTALLSITELIB = $(SITEPREFIX)/share/perl/5.10.1
+INSTALLSITELIB = $(SITEPREFIX)/share/perl/5.14.2
 DESTINSTALLSITELIB = $(DESTDIR)$(INSTALLSITELIB)
 INSTALLVENDORLIB = $(VENDORPREFIX)/share/perl5
 DESTINSTALLVENDORLIB = $(DESTDIR)$(INSTALLVENDORLIB)
-INSTALLARCHLIB = $(PERLPREFIX)/lib/perl/5.10
+INSTALLARCHLIB = $(PERLPREFIX)/lib/perl/5.14
 DESTINSTALLARCHLIB = $(DESTDIR)$(INSTALLARCHLIB)
-INSTALLSITEARCH = $(SITEPREFIX)/lib/perl/5.10.1
+INSTALLSITEARCH = $(SITEPREFIX)/lib/perl/5.14.2
 DESTINSTALLSITEARCH = $(DESTDIR)$(INSTALLSITEARCH)
 INSTALLVENDORARCH = $(VENDORPREFIX)/lib/perl5
 DESTINSTALLVENDORARCH = $(DESTDIR)$(INSTALLVENDORARCH)
@@ -112,14 +112,14 @@ INSTALLSITEMAN3DIR = $(SITEPREFIX)/man/man3
 DESTINSTALLSITEMAN3DIR = $(DESTDIR)$(INSTALLSITEMAN3DIR)
 INSTALLVENDORMAN3DIR = $(VENDORPREFIX)/share/man/man3
 DESTINSTALLVENDORMAN3DIR = $(DESTDIR)$(INSTALLVENDORMAN3DIR)
-PERL_LIB = /usr/share/perl/5.10
-PERL_ARCHLIB = /usr/lib/perl/5.10
+PERL_LIB = /usr/share/perl/5.14
+PERL_ARCHLIB = /usr/lib/perl/5.14
 LIBPERL_A = libperl.a
 FIRST_MAKEFILE = Makefile
 MAKEFILE_OLD = Makefile.old
 MAKE_APERL_FILE = Makefile.aperl
 PERLMAINCC = $(CC)
-PERL_INC = /usr/lib/perl/5.10/CORE
+PERL_INC = /usr/lib/perl/5.14/CORE
 PERL = /usr/bin/perl
 FULLPERL = /usr/bin/perl
 ABSPERL = $(PERL)
@@ -134,9 +134,9 @@ PERM_DIR = 755
 PERM_RW = 644
 PERM_RWX = 755
 
-MAKEMAKER   = /usr/share/perl/5.10/ExtUtils/MakeMaker.pm
-MM_VERSION  = 6.55_02
-MM_REVISION = 65502
+MAKEMAKER   = /usr/share/perl/5.14/ExtUtils/MakeMaker.pm
+MM_VERSION  = 6.57_05
+MM_REVISION = 65705
 
 # FULLEXT = Pathname for extension directory (eg Foo/Bar/Oracle).
 # BASEEXT = Basename part of FULLEXT. May be just equal FULLEXT. (eg Oracle)
@@ -169,10 +169,30 @@ MAN1PODS = filter/tv_cat \
 	filter/tv_to_latex \
 	filter/tv_to_potatoe \
 	filter/tv_to_text \
+	grab/ar/tv_grab_ar \
+	grab/ch_search/tv_grab_ch_search \
 	grab/combiner/tv_grab_combiner \
+	grab/dtv_la/tv_grab_dtv_la \
+	grab/ee/tv_grab_ee \
+	grab/es_laguiatv/tv_grab_es_laguiatv \
+	grab/es_miguiatv/tv_grab_es_miguiatv \
+	grab/eu_epgdata/tv_grab_eu_epgdata \
+	grab/fi/tv_grab_fi \
+	grab/fi_sv/tv_grab_fi_sv \
+	grab/fr/tv_grab_fr \
+	grab/fr_kazer/tv_grab_fr_kazer \
+	grab/huro/tv_grab_huro \
+	grab/il/tv_grab_il \
+	grab/in/tv_grab_in \
+	grab/it/tv_grab_it \
 	grab/na_dd/tv_grab_na_dd \
 	grab/na_dtv/tv_grab_na_dtv \
 	grab/na_icons/tv_grab_na_icons \
+	grab/nl/tv_grab_nl \
+	grab/pt/tv_grab_pt \
+	grab/pt_meo/tv_grab_pt_meo \
+	grab/uk_bleb/tv_grab_uk_bleb \
+	grab/za/tv_grab_za \
 	tools/tv_find_grabbers \
 	tools/tv_validate_file \
 	tools/tv_validate_grabber
@@ -317,17 +337,17 @@ PM_TO_BLIB = grab/Get_nice.pm \
 	$(INST_LIBDIR)/XMLTV/Lineup.pm
 INSTALLMAN1DIR = $(DESTDIR)/./$(PREFIX)/share/man/man1
 INSTALLMAN3DIR = $(DESTDIR)/./$(PREFIX)/share/man/man3
-INSTALLPLAINDOC = $(DESTDIR)/./$(PREFIX)/share/doc/xmltv-0.5.59
+INSTALLPLAINDOC = $(DESTDIR)/./$(PREFIX)/share/doc/xmltv-0.5.61
 INSTALLSHARE = $(DESTDIR)/./$(PREFIX)/share/xmltv
 INST_PLAINDOC = blib/doc
 INST_SHARE = blib/share
 MAN3EXT = 3
-VERSION = 0.5.59
-WINDOWS_DIST = xmltv-0.5.59-win32
+VERSION = 0.5.61
+WINDOWS_DIST = xmltv-0.5.61-win32
 
 
 # --- MakeMaker platform_constants section:
-MM_Unix_VERSION = 6.55_02
+MM_Unix_VERSION = 6.57_05
 PERL_MALLOC_DEF = -DPERL_EXTMALLOC_DEF -Dmalloc=Perl_malloc -Dfree=Perl_mfree -Drealloc=Perl_realloc -Dcalloc=Perl_calloc
 
 
@@ -417,6 +437,7 @@ DISTVNAME = XMLTV-
 
 PASTHRU = LIBPERL_A="$(LIBPERL_A)"\
 	LINKTYPE="$(LINKTYPE)"\
+	LD="$(LD)"\
 	PREFIX="$(PREFIX)"
 
 
@@ -545,22 +566,42 @@ POD2MAN = $(POD2MAN_EXE)
 
 
 manifypods : pure_all  \
+	grab/ch_search/tv_grab_ch_search \
+	grab/za/tv_grab_za \
+	grab/dtv_la/tv_grab_dtv_la \
 	grab/na_dtv/tv_grab_na_dtv \
 	tools/tv_validate_file \
-	filter/tv_sort \
-	filter/tv_remove_some_overlapping \
+	grab/huro/tv_grab_huro \
+	grab/ar/tv_grab_ar \
 	grab/na_icons/tv_grab_na_icons \
+	grab/uk_bleb/tv_grab_uk_bleb \
 	tools/tv_validate_grabber \
 	tools/tv_find_grabbers \
 	filter/tv_split \
-	filter/tv_to_text \
+	grab/nl/tv_grab_nl \
 	filter/tv_extractinfo_ar \
 	filter/tv_grep \
 	filter/tv_extractinfo_en \
+	grab/fi_sv/tv_grab_fi_sv \
+	filter/tv_imdb \
+	grab/es_laguiatv/tv_grab_es_laguiatv \
+	grab/il/tv_grab_il \
+	grab/it/tv_grab_it \
+	grab/pt/tv_grab_pt \
+	grab/fr_kazer/tv_grab_fr_kazer \
+	filter/tv_sort \
+	grab/pt_meo/tv_grab_pt_meo \
+	grab/fr/tv_grab_fr \
+	grab/ee/tv_grab_ee \
+	filter/tv_remove_some_overlapping \
+	grab/fi/tv_grab_fi \
+	grab/es_miguiatv/tv_grab_es_miguiatv \
+	filter/tv_to_text \
 	grab/na_dd/tv_grab_na_dd \
 	filter/tv_cat \
-	filter/tv_imdb \
+	grab/in/tv_grab_in \
 	filter/tv_to_latex \
+	grab/eu_epgdata/tv_grab_eu_epgdata \
 	grab/combiner/tv_grab_combiner \
 	filter/tv_to_potatoe \
 	lib/ValidateGrabber.pm \
@@ -579,22 +620,42 @@ manifypods : pure_all  \
 	lib/GUI.pm \
 	lib/Configure/Writer.pm
 	$(NOECHO) $(POD2MAN) --section=$(MAN1EXT) --perm_rw=$(PERM_RW) \
+	  grab/ch_search/tv_grab_ch_search $(INST_MAN1DIR)/tv_grab_ch_search.$(MAN1EXT) \
+	  grab/za/tv_grab_za $(INST_MAN1DIR)/tv_grab_za.$(MAN1EXT) \
+	  grab/dtv_la/tv_grab_dtv_la $(INST_MAN1DIR)/tv_grab_dtv_la.$(MAN1EXT) \
 	  grab/na_dtv/tv_grab_na_dtv $(INST_MAN1DIR)/tv_grab_na_dtv.$(MAN1EXT) \
 	  tools/tv_validate_file $(INST_MAN1DIR)/tv_validate_file.$(MAN1EXT) \
-	  filter/tv_sort $(INST_MAN1DIR)/tv_sort.$(MAN1EXT) \
-	  filter/tv_remove_some_overlapping $(INST_MAN1DIR)/tv_remove_some_overlapping.$(MAN1EXT) \
+	  grab/huro/tv_grab_huro $(INST_MAN1DIR)/tv_grab_huro.$(MAN1EXT) \
+	  grab/ar/tv_grab_ar $(INST_MAN1DIR)/tv_grab_ar.$(MAN1EXT) \
 	  grab/na_icons/tv_grab_na_icons $(INST_MAN1DIR)/tv_grab_na_icons.$(MAN1EXT) \
+	  grab/uk_bleb/tv_grab_uk_bleb $(INST_MAN1DIR)/tv_grab_uk_bleb.$(MAN1EXT) \
 	  tools/tv_validate_grabber $(INST_MAN1DIR)/tv_validate_grabber.$(MAN1EXT) \
 	  tools/tv_find_grabbers $(INST_MAN1DIR)/tv_find_grabbers.$(MAN1EXT) \
 	  filter/tv_split $(INST_MAN1DIR)/tv_split.$(MAN1EXT) \
-	  filter/tv_to_text $(INST_MAN1DIR)/tv_to_text.$(MAN1EXT) \
+	  grab/nl/tv_grab_nl $(INST_MAN1DIR)/tv_grab_nl.$(MAN1EXT) \
 	  filter/tv_extractinfo_ar $(INST_MAN1DIR)/tv_extractinfo_ar.$(MAN1EXT) \
 	  filter/tv_grep $(INST_MAN1DIR)/tv_grep.$(MAN1EXT) \
 	  filter/tv_extractinfo_en $(INST_MAN1DIR)/tv_extractinfo_en.$(MAN1EXT) \
+	  grab/fi_sv/tv_grab_fi_sv $(INST_MAN1DIR)/tv_grab_fi_sv.$(MAN1EXT) \
+	  filter/tv_imdb $(INST_MAN1DIR)/tv_imdb.$(MAN1EXT) \
+	  grab/es_laguiatv/tv_grab_es_laguiatv $(INST_MAN1DIR)/tv_grab_es_laguiatv.$(MAN1EXT) \
+	  grab/il/tv_grab_il $(INST_MAN1DIR)/tv_grab_il.$(MAN1EXT) \
+	  grab/it/tv_grab_it $(INST_MAN1DIR)/tv_grab_it.$(MAN1EXT) \
+	  grab/pt/tv_grab_pt $(INST_MAN1DIR)/tv_grab_pt.$(MAN1EXT) \
+	  grab/fr_kazer/tv_grab_fr_kazer $(INST_MAN1DIR)/tv_grab_fr_kazer.$(MAN1EXT) \
+	  filter/tv_sort $(INST_MAN1DIR)/tv_sort.$(MAN1EXT) \
+	  grab/pt_meo/tv_grab_pt_meo $(INST_MAN1DIR)/tv_grab_pt_meo.$(MAN1EXT) \
+	  grab/fr/tv_grab_fr $(INST_MAN1DIR)/tv_grab_fr.$(MAN1EXT) \
+	  grab/ee/tv_grab_ee $(INST_MAN1DIR)/tv_grab_ee.$(MAN1EXT) \
+	  filter/tv_remove_some_overlapping $(INST_MAN1DIR)/tv_remove_some_overlapping.$(MAN1EXT) \
+	  grab/fi/tv_grab_fi $(INST_MAN1DIR)/tv_grab_fi.$(MAN1EXT) \
+	  grab/es_miguiatv/tv_grab_es_miguiatv $(INST_MAN1DIR)/tv_grab_es_miguiatv.$(MAN1EXT) \
+	  filter/tv_to_text $(INST_MAN1DIR)/tv_to_text.$(MAN1EXT) \
 	  grab/na_dd/tv_grab_na_dd $(INST_MAN1DIR)/tv_grab_na_dd.$(MAN1EXT) \
 	  filter/tv_cat $(INST_MAN1DIR)/tv_cat.$(MAN1EXT) \
-	  filter/tv_imdb $(INST_MAN1DIR)/tv_imdb.$(MAN1EXT) \
+	  grab/in/tv_grab_in $(INST_MAN1DIR)/tv_grab_in.$(MAN1EXT) \
 	  filter/tv_to_latex $(INST_MAN1DIR)/tv_to_latex.$(MAN1EXT) \
+	  grab/eu_epgdata/tv_grab_eu_epgdata $(INST_MAN1DIR)/tv_grab_eu_epgdata.$(MAN1EXT) \
 	  grab/combiner/tv_grab_combiner $(INST_MAN1DIR)/tv_grab_combiner.$(MAN1EXT) \
 	  filter/tv_to_potatoe $(INST_MAN1DIR)/tv_to_potatoe.$(MAN1EXT) 
 	$(NOECHO) $(POD2MAN) --section=$(MAN3EXT) --perm_rw=$(PERM_RW) \
@@ -625,6 +686,27 @@ all :: filter/tv_grep
 filter/tv_grep :: filter/tv_grep.PL pm_to_blib filter/tv_grep.in pm_to_blib
 	$(PERLRUNINST) filter/tv_grep.PL filter/tv_grep
 
+all :: grab/ch_search/tv_grab_ch_search
+	$(NOECHO) $(NOOP)
+
+grab/ch_search/tv_grab_ch_search :: grab/ch_search/tv_grab_ch_search.PL pm_to_blib grab/ch_search/tv_grab_ch_search.in
+	$(PERLRUNINST) grab/ch_search/tv_grab_ch_search.PL grab/ch_search/tv_grab_ch_search $(PREFIX)/share/xmltv
+all :: grab/fi/tv_grab_fi
+	$(NOECHO) $(NOOP)
+
+grab/fi/tv_grab_fi :: grab/fi/merge.PL pm_to_blib grab/fi/tv_grab_fi.pl grab/fi/fi/common.pm grab/fi/fi/day.pm grab/fi/fi/programme.pm grab/fi/fi/programmeStartOnly.pm grab/fi/fi/source/mtv3.pm grab/fi/fi/source/telkku.pm grab/fi/fi/source/telvis.pm grab/fi/fi/source/tvnyt.pm grab/fi/fi/source/yle.pm
+	$(PERLRUNINST) grab/fi/merge.PL grab/fi/tv_grab_fi
+
+all :: grab/huro/tv_grab_huro
+	$(NOECHO) $(NOOP)
+
+grab/huro/tv_grab_huro :: grab/huro/tv_grab_huro.PL pm_to_blib grab/huro/tv_grab_huro.in
+	$(PERLRUNINST) grab/huro/tv_grab_huro.PL grab/huro/tv_grab_huro $(PREFIX)/share/xmltv
+all :: grab/it/tv_grab_it
+	$(NOECHO) $(NOOP)
+
+grab/it/tv_grab_it :: grab/it/tv_grab_it.PL pm_to_blib grab/it/tv_grab_it.in
+	$(PERLRUNINST) grab/it/tv_grab_it.PL grab/it/tv_grab_it $(PREFIX)/share/xmltv
 all :: grab/na_dd/tv_grab_na_dd
 	$(NOECHO) $(NOOP)
 
@@ -635,22 +717,27 @@ all :: grab/na_icons/tv_grab_na_icons
 
 grab/na_icons/tv_grab_na_icons :: grab/na_icons/tv_grab_na_icons.PL pm_to_blib grab/na_icons/tv_grab_na_icons.in
 	$(PERLRUNINST) grab/na_icons/tv_grab_na_icons.PL grab/na_icons/tv_grab_na_icons $(PREFIX)/share/xmltv
+all :: grab/uk_bleb/tv_grab_uk_bleb
+	$(NOECHO) $(NOOP)
+
+grab/uk_bleb/tv_grab_uk_bleb :: grab/uk_bleb/tv_grab_uk_bleb.PL pm_to_blib grab/uk_bleb/tv_grab_uk_bleb.in
+	$(PERLRUNINST) grab/uk_bleb/tv_grab_uk_bleb.PL grab/uk_bleb/tv_grab_uk_bleb $(PREFIX)/share/xmltv
 all :: lib/Lineup.pm
 	$(NOECHO) $(NOOP)
 
 lib/Lineup.pm :: lib/Lineup.pm.PL  lib/Lineup.pm.in
-	$(PERLRUNINST) lib/Lineup.pm.PL lib/Lineup.pm
+	$(PERLRUN) lib/Lineup.pm.PL lib/Lineup.pm
 
 all :: lib/Supplement.pm
 	$(NOECHO) $(NOOP)
 
 lib/Supplement.pm :: lib/Supplement.pm.PL  lib/Supplement.pm.in
-	$(PERLRUNINST) lib/Supplement.pm.PL lib/Supplement.pm $(PREFIX)/share/xmltv
+	$(PERLRUN) lib/Supplement.pm.PL lib/Supplement.pm $(PREFIX)/share/xmltv
 all :: lib/XMLTV.pm
 	$(NOECHO) $(NOOP)
 
 lib/XMLTV.pm :: lib/XMLTV.pm.PL  lib/XMLTV.pm.in
-	$(PERLRUNINST) lib/XMLTV.pm.PL lib/XMLTV.pm
+	$(PERLRUN) lib/XMLTV.pm.PL lib/XMLTV.pm
 
 all :: tools/tv_validate_file
 	$(NOECHO) $(NOOP)
@@ -665,22 +752,50 @@ tools/tv_validate_grabber :: tools/tv_validate_grabber.PL pm_to_blib tools/tv_va
 
 # --- MakeMaker installbin section:
 
-EXE_FILES = filter/tv_extractinfo_en filter/tv_extractinfo_ar filter/tv_grep filter/tv_sort filter/tv_to_latex filter/tv_to_text filter/tv_to_potatoe filter/tv_cat filter/tv_split filter/tv_imdb filter/tv_remove_some_overlapping tools/tv_validate_grabber tools/tv_validate_file tools/tv_find_grabbers grab/na_dd/tv_grab_na_dd grab/na_icons/tv_grab_na_icons grab/combiner/tv_grab_combiner grab/na_dtv/tv_grab_na_dtv
+EXE_FILES = filter/tv_extractinfo_en filter/tv_extractinfo_ar filter/tv_grep filter/tv_sort filter/tv_to_latex filter/tv_to_text filter/tv_to_potatoe filter/tv_cat filter/tv_split filter/tv_imdb filter/tv_remove_some_overlapping tools/tv_validate_grabber tools/tv_validate_file tools/tv_find_grabbers grab/ar/tv_grab_ar grab/ch_search/tv_grab_ch_search grab/dtv_la/tv_grab_dtv_la grab/uk_bleb/tv_grab_uk_bleb grab/it/tv_grab_it grab/in/tv_grab_in grab/na_dd/tv_grab_na_dd grab/na_icons/tv_grab_na_icons grab/fi/tv_grab_fi grab/fi_sv/tv_grab_fi_sv grab/il/tv_grab_il grab/es_laguiatv/tv_grab_es_laguiatv grab/es_miguiatv/tv_grab_es_miguiatv grab/nl/tv_grab_nl grab/huro/tv_grab_huro grab/fr/tv_grab_fr grab/fr_kazer/tv_grab_fr_kazer grab/pt/tv_grab_pt grab/pt_meo/tv_grab_pt_meo grab/za/tv_grab_za grab/eu_epgdata/tv_grab_eu_epgdata grab/combiner/tv_grab_combiner grab/ee/tv_grab_ee grab/na_dtv/tv_grab_na_dtv
 
-pure_all :: $(INST_SCRIPT)/tv_grab_na_dtv $(INST_SCRIPT)/tv_validate_file $(INST_SCRIPT)/tv_sort $(INST_SCRIPT)/tv_remove_some_overlapping $(INST_SCRIPT)/tv_grab_na_icons $(INST_SCRIPT)/tv_validate_grabber $(INST_SCRIPT)/tv_find_grabbers $(INST_SCRIPT)/tv_split $(INST_SCRIPT)/tv_to_text $(INST_SCRIPT)/tv_extractinfo_ar $(INST_SCRIPT)/tv_grep $(INST_SCRIPT)/tv_extractinfo_en $(INST_SCRIPT)/tv_grab_na_dd $(INST_SCRIPT)/tv_cat $(INST_SCRIPT)/tv_imdb $(INST_SCRIPT)/tv_to_latex $(INST_SCRIPT)/tv_grab_combiner $(INST_SCRIPT)/tv_to_potatoe pure_plaindoc pure_share
+pure_all :: $(INST_SCRIPT)/tv_grab_ch_search $(INST_SCRIPT)/tv_grab_za $(INST_SCRIPT)/tv_grab_dtv_la $(INST_SCRIPT)/tv_grab_na_dtv $(INST_SCRIPT)/tv_validate_file $(INST_SCRIPT)/tv_grab_huro $(INST_SCRIPT)/tv_grab_ar $(INST_SCRIPT)/tv_grab_na_icons $(INST_SCRIPT)/tv_grab_uk_bleb $(INST_SCRIPT)/tv_validate_grabber $(INST_SCRIPT)/tv_find_grabbers $(INST_SCRIPT)/tv_split $(INST_SCRIPT)/tv_grab_nl $(INST_SCRIPT)/tv_extractinfo_ar $(INST_SCRIPT)/tv_grep $(INST_SCRIPT)/tv_extractinfo_en $(INST_SCRIPT)/tv_grab_fi_sv $(INST_SCRIPT)/tv_imdb $(INST_SCRIPT)/tv_grab_es_laguiatv $(INST_SCRIPT)/tv_grab_il $(INST_SCRIPT)/tv_grab_it $(INST_SCRIPT)/tv_grab_pt $(INST_SCRIPT)/tv_grab_fr_kazer $(INST_SCRIPT)/tv_sort $(INST_SCRIPT)/tv_grab_pt_meo $(INST_SCRIPT)/tv_grab_fr $(INST_SCRIPT)/tv_grab_ee $(INST_SCRIPT)/tv_remove_some_overlapping $(INST_SCRIPT)/tv_grab_fi $(INST_SCRIPT)/tv_grab_es_miguiatv $(INST_SCRIPT)/tv_to_text $(INST_SCRIPT)/tv_grab_na_dd $(INST_SCRIPT)/tv_cat $(INST_SCRIPT)/tv_grab_in $(INST_SCRIPT)/tv_to_latex $(INST_SCRIPT)/tv_grab_eu_epgdata $(INST_SCRIPT)/tv_grab_combiner $(INST_SCRIPT)/tv_to_potatoe pure_plaindoc pure_share
 	$(NOECHO) $(NOOP)
 
 realclean ::
 	$(RM_F)  realclean_plaindoc  realclean_share \
-	  $(INST_SCRIPT)/tv_grab_na_dtv $(INST_SCRIPT)/tv_validate_file \
-	  $(INST_SCRIPT)/tv_sort $(INST_SCRIPT)/tv_remove_some_overlapping \
-	  $(INST_SCRIPT)/tv_grab_na_icons $(INST_SCRIPT)/tv_validate_grabber \
+	  $(INST_SCRIPT)/tv_grab_ch_search $(INST_SCRIPT)/tv_grab_za \
+	  $(INST_SCRIPT)/tv_grab_dtv_la $(INST_SCRIPT)/tv_grab_na_dtv \
+	  $(INST_SCRIPT)/tv_validate_file $(INST_SCRIPT)/tv_grab_huro \
+	  $(INST_SCRIPT)/tv_grab_ar $(INST_SCRIPT)/tv_grab_na_icons \
+	  $(INST_SCRIPT)/tv_grab_uk_bleb $(INST_SCRIPT)/tv_validate_grabber \
 	  $(INST_SCRIPT)/tv_find_grabbers $(INST_SCRIPT)/tv_split \
-	  $(INST_SCRIPT)/tv_to_text $(INST_SCRIPT)/tv_extractinfo_ar \
+	  $(INST_SCRIPT)/tv_grab_nl $(INST_SCRIPT)/tv_extractinfo_ar \
 	  $(INST_SCRIPT)/tv_grep $(INST_SCRIPT)/tv_extractinfo_en \
-	  $(INST_SCRIPT)/tv_grab_na_dd $(INST_SCRIPT)/tv_cat \
-	  $(INST_SCRIPT)/tv_imdb $(INST_SCRIPT)/tv_to_latex \
+	  $(INST_SCRIPT)/tv_grab_fi_sv $(INST_SCRIPT)/tv_imdb \
+	  $(INST_SCRIPT)/tv_grab_es_laguiatv $(INST_SCRIPT)/tv_grab_il \
+	  $(INST_SCRIPT)/tv_grab_it $(INST_SCRIPT)/tv_grab_pt \
+	  $(INST_SCRIPT)/tv_grab_fr_kazer $(INST_SCRIPT)/tv_sort \
+	  $(INST_SCRIPT)/tv_grab_pt_meo $(INST_SCRIPT)/tv_grab_fr \
+	  $(INST_SCRIPT)/tv_grab_ee $(INST_SCRIPT)/tv_remove_some_overlapping \
+	  $(INST_SCRIPT)/tv_grab_fi $(INST_SCRIPT)/tv_grab_es_miguiatv \
+	  $(INST_SCRIPT)/tv_to_text $(INST_SCRIPT)/tv_grab_na_dd \
+	  $(INST_SCRIPT)/tv_cat $(INST_SCRIPT)/tv_grab_in \
+	  $(INST_SCRIPT)/tv_to_latex $(INST_SCRIPT)/tv_grab_eu_epgdata \
 	  $(INST_SCRIPT)/tv_grab_combiner $(INST_SCRIPT)/tv_to_potatoe 
+
+$(INST_SCRIPT)/tv_grab_ch_search : grab/ch_search/tv_grab_ch_search $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
+	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_grab_ch_search
+	$(CP) grab/ch_search/tv_grab_ch_search $(INST_SCRIPT)/tv_grab_ch_search
+	$(FIXIN) $(INST_SCRIPT)/tv_grab_ch_search
+	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_grab_ch_search
+
+$(INST_SCRIPT)/tv_grab_za : grab/za/tv_grab_za $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
+	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_grab_za
+	$(CP) grab/za/tv_grab_za $(INST_SCRIPT)/tv_grab_za
+	$(FIXIN) $(INST_SCRIPT)/tv_grab_za
+	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_grab_za
+
+$(INST_SCRIPT)/tv_grab_dtv_la : grab/dtv_la/tv_grab_dtv_la $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
+	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_grab_dtv_la
+	$(CP) grab/dtv_la/tv_grab_dtv_la $(INST_SCRIPT)/tv_grab_dtv_la
+	$(FIXIN) $(INST_SCRIPT)/tv_grab_dtv_la
+	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_grab_dtv_la
 
 $(INST_SCRIPT)/tv_grab_na_dtv : grab/na_dtv/tv_grab_na_dtv $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
 	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_grab_na_dtv
@@ -694,23 +809,29 @@ $(INST_SCRIPT)/tv_validate_file : tools/tv_validate_file $(FIRST_MAKEFILE) $(INS
 	$(FIXIN) $(INST_SCRIPT)/tv_validate_file
 	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_validate_file
 
-$(INST_SCRIPT)/tv_sort : filter/tv_sort $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
-	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_sort
-	$(CP) filter/tv_sort $(INST_SCRIPT)/tv_sort
-	$(FIXIN) $(INST_SCRIPT)/tv_sort
-	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_sort
+$(INST_SCRIPT)/tv_grab_huro : grab/huro/tv_grab_huro $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
+	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_grab_huro
+	$(CP) grab/huro/tv_grab_huro $(INST_SCRIPT)/tv_grab_huro
+	$(FIXIN) $(INST_SCRIPT)/tv_grab_huro
+	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_grab_huro
 
-$(INST_SCRIPT)/tv_remove_some_overlapping : filter/tv_remove_some_overlapping $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
-	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_remove_some_overlapping
-	$(CP) filter/tv_remove_some_overlapping $(INST_SCRIPT)/tv_remove_some_overlapping
-	$(FIXIN) $(INST_SCRIPT)/tv_remove_some_overlapping
-	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_remove_some_overlapping
+$(INST_SCRIPT)/tv_grab_ar : grab/ar/tv_grab_ar $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
+	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_grab_ar
+	$(CP) grab/ar/tv_grab_ar $(INST_SCRIPT)/tv_grab_ar
+	$(FIXIN) $(INST_SCRIPT)/tv_grab_ar
+	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_grab_ar
 
 $(INST_SCRIPT)/tv_grab_na_icons : grab/na_icons/tv_grab_na_icons $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
 	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_grab_na_icons
 	$(CP) grab/na_icons/tv_grab_na_icons $(INST_SCRIPT)/tv_grab_na_icons
 	$(FIXIN) $(INST_SCRIPT)/tv_grab_na_icons
 	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_grab_na_icons
+
+$(INST_SCRIPT)/tv_grab_uk_bleb : grab/uk_bleb/tv_grab_uk_bleb $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
+	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_grab_uk_bleb
+	$(CP) grab/uk_bleb/tv_grab_uk_bleb $(INST_SCRIPT)/tv_grab_uk_bleb
+	$(FIXIN) $(INST_SCRIPT)/tv_grab_uk_bleb
+	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_grab_uk_bleb
 
 $(INST_SCRIPT)/tv_validate_grabber : tools/tv_validate_grabber $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
 	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_validate_grabber
@@ -730,11 +851,11 @@ $(INST_SCRIPT)/tv_split : filter/tv_split $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSE
 	$(FIXIN) $(INST_SCRIPT)/tv_split
 	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_split
 
-$(INST_SCRIPT)/tv_to_text : filter/tv_to_text $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
-	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_to_text
-	$(CP) filter/tv_to_text $(INST_SCRIPT)/tv_to_text
-	$(FIXIN) $(INST_SCRIPT)/tv_to_text
-	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_to_text
+$(INST_SCRIPT)/tv_grab_nl : grab/nl/tv_grab_nl $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
+	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_grab_nl
+	$(CP) grab/nl/tv_grab_nl $(INST_SCRIPT)/tv_grab_nl
+	$(FIXIN) $(INST_SCRIPT)/tv_grab_nl
+	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_grab_nl
 
 $(INST_SCRIPT)/tv_extractinfo_ar : filter/tv_extractinfo_ar $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
 	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_extractinfo_ar
@@ -754,6 +875,96 @@ $(INST_SCRIPT)/tv_extractinfo_en : filter/tv_extractinfo_en $(FIRST_MAKEFILE) $(
 	$(FIXIN) $(INST_SCRIPT)/tv_extractinfo_en
 	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_extractinfo_en
 
+$(INST_SCRIPT)/tv_grab_fi_sv : grab/fi_sv/tv_grab_fi_sv $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
+	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_grab_fi_sv
+	$(CP) grab/fi_sv/tv_grab_fi_sv $(INST_SCRIPT)/tv_grab_fi_sv
+	$(FIXIN) $(INST_SCRIPT)/tv_grab_fi_sv
+	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_grab_fi_sv
+
+$(INST_SCRIPT)/tv_imdb : filter/tv_imdb $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
+	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_imdb
+	$(CP) filter/tv_imdb $(INST_SCRIPT)/tv_imdb
+	$(FIXIN) $(INST_SCRIPT)/tv_imdb
+	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_imdb
+
+$(INST_SCRIPT)/tv_grab_es_laguiatv : grab/es_laguiatv/tv_grab_es_laguiatv $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
+	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_grab_es_laguiatv
+	$(CP) grab/es_laguiatv/tv_grab_es_laguiatv $(INST_SCRIPT)/tv_grab_es_laguiatv
+	$(FIXIN) $(INST_SCRIPT)/tv_grab_es_laguiatv
+	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_grab_es_laguiatv
+
+$(INST_SCRIPT)/tv_grab_il : grab/il/tv_grab_il $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
+	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_grab_il
+	$(CP) grab/il/tv_grab_il $(INST_SCRIPT)/tv_grab_il
+	$(FIXIN) $(INST_SCRIPT)/tv_grab_il
+	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_grab_il
+
+$(INST_SCRIPT)/tv_grab_it : grab/it/tv_grab_it $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
+	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_grab_it
+	$(CP) grab/it/tv_grab_it $(INST_SCRIPT)/tv_grab_it
+	$(FIXIN) $(INST_SCRIPT)/tv_grab_it
+	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_grab_it
+
+$(INST_SCRIPT)/tv_grab_pt : grab/pt/tv_grab_pt $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
+	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_grab_pt
+	$(CP) grab/pt/tv_grab_pt $(INST_SCRIPT)/tv_grab_pt
+	$(FIXIN) $(INST_SCRIPT)/tv_grab_pt
+	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_grab_pt
+
+$(INST_SCRIPT)/tv_grab_fr_kazer : grab/fr_kazer/tv_grab_fr_kazer $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
+	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_grab_fr_kazer
+	$(CP) grab/fr_kazer/tv_grab_fr_kazer $(INST_SCRIPT)/tv_grab_fr_kazer
+	$(FIXIN) $(INST_SCRIPT)/tv_grab_fr_kazer
+	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_grab_fr_kazer
+
+$(INST_SCRIPT)/tv_sort : filter/tv_sort $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
+	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_sort
+	$(CP) filter/tv_sort $(INST_SCRIPT)/tv_sort
+	$(FIXIN) $(INST_SCRIPT)/tv_sort
+	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_sort
+
+$(INST_SCRIPT)/tv_grab_pt_meo : grab/pt_meo/tv_grab_pt_meo $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
+	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_grab_pt_meo
+	$(CP) grab/pt_meo/tv_grab_pt_meo $(INST_SCRIPT)/tv_grab_pt_meo
+	$(FIXIN) $(INST_SCRIPT)/tv_grab_pt_meo
+	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_grab_pt_meo
+
+$(INST_SCRIPT)/tv_grab_fr : grab/fr/tv_grab_fr $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
+	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_grab_fr
+	$(CP) grab/fr/tv_grab_fr $(INST_SCRIPT)/tv_grab_fr
+	$(FIXIN) $(INST_SCRIPT)/tv_grab_fr
+	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_grab_fr
+
+$(INST_SCRIPT)/tv_grab_ee : grab/ee/tv_grab_ee $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
+	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_grab_ee
+	$(CP) grab/ee/tv_grab_ee $(INST_SCRIPT)/tv_grab_ee
+	$(FIXIN) $(INST_SCRIPT)/tv_grab_ee
+	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_grab_ee
+
+$(INST_SCRIPT)/tv_remove_some_overlapping : filter/tv_remove_some_overlapping $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
+	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_remove_some_overlapping
+	$(CP) filter/tv_remove_some_overlapping $(INST_SCRIPT)/tv_remove_some_overlapping
+	$(FIXIN) $(INST_SCRIPT)/tv_remove_some_overlapping
+	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_remove_some_overlapping
+
+$(INST_SCRIPT)/tv_grab_fi : grab/fi/tv_grab_fi $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
+	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_grab_fi
+	$(CP) grab/fi/tv_grab_fi $(INST_SCRIPT)/tv_grab_fi
+	$(FIXIN) $(INST_SCRIPT)/tv_grab_fi
+	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_grab_fi
+
+$(INST_SCRIPT)/tv_grab_es_miguiatv : grab/es_miguiatv/tv_grab_es_miguiatv $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
+	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_grab_es_miguiatv
+	$(CP) grab/es_miguiatv/tv_grab_es_miguiatv $(INST_SCRIPT)/tv_grab_es_miguiatv
+	$(FIXIN) $(INST_SCRIPT)/tv_grab_es_miguiatv
+	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_grab_es_miguiatv
+
+$(INST_SCRIPT)/tv_to_text : filter/tv_to_text $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
+	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_to_text
+	$(CP) filter/tv_to_text $(INST_SCRIPT)/tv_to_text
+	$(FIXIN) $(INST_SCRIPT)/tv_to_text
+	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_to_text
+
 $(INST_SCRIPT)/tv_grab_na_dd : grab/na_dd/tv_grab_na_dd $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
 	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_grab_na_dd
 	$(CP) grab/na_dd/tv_grab_na_dd $(INST_SCRIPT)/tv_grab_na_dd
@@ -766,17 +977,23 @@ $(INST_SCRIPT)/tv_cat : filter/tv_cat $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).e
 	$(FIXIN) $(INST_SCRIPT)/tv_cat
 	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_cat
 
-$(INST_SCRIPT)/tv_imdb : filter/tv_imdb $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
-	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_imdb
-	$(CP) filter/tv_imdb $(INST_SCRIPT)/tv_imdb
-	$(FIXIN) $(INST_SCRIPT)/tv_imdb
-	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_imdb
+$(INST_SCRIPT)/tv_grab_in : grab/in/tv_grab_in $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
+	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_grab_in
+	$(CP) grab/in/tv_grab_in $(INST_SCRIPT)/tv_grab_in
+	$(FIXIN) $(INST_SCRIPT)/tv_grab_in
+	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_grab_in
 
 $(INST_SCRIPT)/tv_to_latex : filter/tv_to_latex $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
 	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_to_latex
 	$(CP) filter/tv_to_latex $(INST_SCRIPT)/tv_to_latex
 	$(FIXIN) $(INST_SCRIPT)/tv_to_latex
 	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_to_latex
+
+$(INST_SCRIPT)/tv_grab_eu_epgdata : grab/eu_epgdata/tv_grab_eu_epgdata $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
+	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_grab_eu_epgdata
+	$(CP) grab/eu_epgdata/tv_grab_eu_epgdata $(INST_SCRIPT)/tv_grab_eu_epgdata
+	$(FIXIN) $(INST_SCRIPT)/tv_grab_eu_epgdata
+	-$(NOECHO) $(CHMOD) $(PERM_RWX) $(INST_SCRIPT)/tv_grab_eu_epgdata
 
 $(INST_SCRIPT)/tv_grab_combiner : grab/combiner/tv_grab_combiner $(FIRST_MAKEFILE) $(INST_SCRIPT)$(DFSEP).exists $(INST_BIN)$(DFSEP).exists
 	$(NOECHO) $(RM_F) $(INST_SCRIPT)/tv_grab_combiner
@@ -810,6 +1027,54 @@ pure_plaindoc :: $(INST_PLAINDOC)/README $(INST_PLAINDOC)/COPYING $(INST_PLAINDO
 	@$(NOOP)
 realclean_plaindoc ::
 	$(RM_F) $(INST_PLAINDOC)/README $(INST_PLAINDOC)/COPYING $(INST_PLAINDOC)/QuickStart $(INST_PLAINDOC)/README.win32 
+$(INST_SHARE)/tv_grab_eu_epgdata/.exists :: $(PERL_INC)/perl.h $(INST_SHARE)/.exists
+	@$(MKPATH) $(INST_SHARE)/tv_grab_eu_epgdata
+	@$(EQUALIZE_TIMESTAMP) $(PERL_INC)/perl.h $(INST_SHARE)/tv_grab_eu_epgdata/.exists
+	-@$(CHMOD) $(PERM_RWX) $(INST_SHARE)/tv_grab_eu_epgdata
+$(INST_SHARE)/tv_grab_eu_epgdata/channel_ids: grab/eu_epgdata/channel_ids Makefile $(INST_SHARE)/tv_grab_eu_epgdata/.exists
+	@$(RM_F) $(INST_SHARE)/tv_grab_eu_epgdata/channel_ids
+	perl -MExtUtils::Command -e cp grab/eu_epgdata/channel_ids $(INST_SHARE)/tv_grab_eu_epgdata/channel_ids
+	-@$(CHMOD) $(PERM_RW) $(INST_SHARE)/tv_grab_eu_epgdata/channel_ids
+$(INST_SHARE)/tv_grab_huro/.exists :: $(PERL_INC)/perl.h $(INST_SHARE)/.exists
+	@$(MKPATH) $(INST_SHARE)/tv_grab_huro
+	@$(EQUALIZE_TIMESTAMP) $(PERL_INC)/perl.h $(INST_SHARE)/tv_grab_huro/.exists
+	-@$(CHMOD) $(PERM_RWX) $(INST_SHARE)/tv_grab_huro
+$(INST_SHARE)/tv_grab_huro/catmap.cz: grab/huro/catmap.cz Makefile $(INST_SHARE)/tv_grab_huro/.exists
+	@$(RM_F) $(INST_SHARE)/tv_grab_huro/catmap.cz
+	perl -MExtUtils::Command -e cp grab/huro/catmap.cz $(INST_SHARE)/tv_grab_huro/catmap.cz
+	-@$(CHMOD) $(PERM_RW) $(INST_SHARE)/tv_grab_huro/catmap.cz
+$(INST_SHARE)/tv_grab_huro/catmap.hu: grab/huro/catmap.hu Makefile $(INST_SHARE)/tv_grab_huro/.exists
+	@$(RM_F) $(INST_SHARE)/tv_grab_huro/catmap.hu
+	perl -MExtUtils::Command -e cp grab/huro/catmap.hu $(INST_SHARE)/tv_grab_huro/catmap.hu
+	-@$(CHMOD) $(PERM_RW) $(INST_SHARE)/tv_grab_huro/catmap.hu
+$(INST_SHARE)/tv_grab_huro/catmap.ro: grab/huro/catmap.ro Makefile $(INST_SHARE)/tv_grab_huro/.exists
+	@$(RM_F) $(INST_SHARE)/tv_grab_huro/catmap.ro
+	perl -MExtUtils::Command -e cp grab/huro/catmap.ro $(INST_SHARE)/tv_grab_huro/catmap.ro
+	-@$(CHMOD) $(PERM_RW) $(INST_SHARE)/tv_grab_huro/catmap.ro
+$(INST_SHARE)/tv_grab_huro/catmap.sk: grab/huro/catmap.sk Makefile $(INST_SHARE)/tv_grab_huro/.exists
+	@$(RM_F) $(INST_SHARE)/tv_grab_huro/catmap.sk
+	perl -MExtUtils::Command -e cp grab/huro/catmap.sk $(INST_SHARE)/tv_grab_huro/catmap.sk
+	-@$(CHMOD) $(PERM_RW) $(INST_SHARE)/tv_grab_huro/catmap.sk
+$(INST_SHARE)/tv_grab_huro/jobmap: grab/huro/jobmap Makefile $(INST_SHARE)/tv_grab_huro/.exists
+	@$(RM_F) $(INST_SHARE)/tv_grab_huro/jobmap
+	perl -MExtUtils::Command -e cp grab/huro/jobmap $(INST_SHARE)/tv_grab_huro/jobmap
+	-@$(CHMOD) $(PERM_RW) $(INST_SHARE)/tv_grab_huro/jobmap
+$(INST_SHARE)/tv_grab_it/.exists :: $(PERL_INC)/perl.h $(INST_SHARE)/.exists
+	@$(MKPATH) $(INST_SHARE)/tv_grab_it
+	@$(EQUALIZE_TIMESTAMP) $(PERL_INC)/perl.h $(INST_SHARE)/tv_grab_it/.exists
+	-@$(CHMOD) $(PERM_RWX) $(INST_SHARE)/tv_grab_it
+$(INST_SHARE)/tv_grab_it/channel_ids: grab/it/channel_ids Makefile $(INST_SHARE)/tv_grab_it/.exists
+	@$(RM_F) $(INST_SHARE)/tv_grab_it/channel_ids
+	perl -MExtUtils::Command -e cp grab/it/channel_ids $(INST_SHARE)/tv_grab_it/channel_ids
+	-@$(CHMOD) $(PERM_RW) $(INST_SHARE)/tv_grab_it/channel_ids
+$(INST_SHARE)/tv_grab_uk_bleb/.exists :: $(PERL_INC)/perl.h $(INST_SHARE)/.exists
+	@$(MKPATH) $(INST_SHARE)/tv_grab_uk_bleb
+	@$(EQUALIZE_TIMESTAMP) $(PERL_INC)/perl.h $(INST_SHARE)/tv_grab_uk_bleb/.exists
+	-@$(CHMOD) $(PERM_RWX) $(INST_SHARE)/tv_grab_uk_bleb
+$(INST_SHARE)/tv_grab_uk_bleb/icon_urls: grab/uk_bleb/icon_urls Makefile $(INST_SHARE)/tv_grab_uk_bleb/.exists
+	@$(RM_F) $(INST_SHARE)/tv_grab_uk_bleb/icon_urls
+	perl -MExtUtils::Command -e cp grab/uk_bleb/icon_urls $(INST_SHARE)/tv_grab_uk_bleb/icon_urls
+	-@$(CHMOD) $(PERM_RW) $(INST_SHARE)/tv_grab_uk_bleb/icon_urls
 $(INST_SHARE)/xmltv-lineup.dtd: xmltv-lineup.dtd Makefile $(INST_SHARE)/.exists
 	@$(RM_F) $(INST_SHARE)/xmltv-lineup.dtd
 	perl -MExtUtils::Command -e cp xmltv-lineup.dtd $(INST_SHARE)/xmltv-lineup.dtd
@@ -818,10 +1083,10 @@ $(INST_SHARE)/xmltv.dtd: xmltv.dtd Makefile $(INST_SHARE)/.exists
 	@$(RM_F) $(INST_SHARE)/xmltv.dtd
 	perl -MExtUtils::Command -e cp xmltv.dtd $(INST_SHARE)/xmltv.dtd
 	-@$(CHMOD) $(PERM_RW) $(INST_SHARE)/xmltv.dtd
-pure_share :: $(INST_SHARE)/xmltv-lineup.dtd $(INST_SHARE)/xmltv.dtd 
+pure_share :: $(INST_SHARE)/tv_grab_eu_epgdata/channel_ids $(INST_SHARE)/tv_grab_huro/catmap.cz $(INST_SHARE)/tv_grab_huro/catmap.hu $(INST_SHARE)/tv_grab_huro/catmap.ro $(INST_SHARE)/tv_grab_huro/catmap.sk $(INST_SHARE)/tv_grab_huro/jobmap $(INST_SHARE)/tv_grab_it/channel_ids $(INST_SHARE)/tv_grab_uk_bleb/icon_urls $(INST_SHARE)/xmltv-lineup.dtd $(INST_SHARE)/xmltv.dtd 
 	@$(NOOP)
 realclean_share ::
-	$(RM_F) $(INST_SHARE)/xmltv-lineup.dtd $(INST_SHARE)/xmltv.dtd 
+	$(RM_F) $(INST_SHARE)/tv_grab_eu_epgdata/channel_ids $(INST_SHARE)/tv_grab_huro/catmap.cz $(INST_SHARE)/tv_grab_huro/catmap.hu $(INST_SHARE)/tv_grab_huro/catmap.ro $(INST_SHARE)/tv_grab_huro/catmap.sk $(INST_SHARE)/tv_grab_huro/jobmap $(INST_SHARE)/tv_grab_it/channel_ids $(INST_SHARE)/tv_grab_uk_bleb/icon_urls $(INST_SHARE)/xmltv-lineup.dtd $(INST_SHARE)/xmltv.dtd 
 
 
 # --- MakeMaker subdirs section:
@@ -844,17 +1109,17 @@ clean :: clean_subdirs
 	  core.[0-9] $(INST_ARCHAUTODIR)/extralibs.all \
 	  core.[0-9][0-9] $(BASEEXT).bso \
 	  pm_to_blib.ts core.[0-9][0-9][0-9][0-9] \
-	  $(BASEEXT).x $(BOOTSTRAP) \
-	  perl$(EXE_EXT) tmon.out \
-	  *$(OBJ_EXT) pm_to_blib \
-	  $(INST_ARCHAUTODIR)/extralibs.ld blibdirs.ts \
-	  core.[0-9][0-9][0-9][0-9][0-9] *perl.core \
-	  core.*perl.*.? $(MAKE_APERL_FILE) \
-	  perl $(BASEEXT).def \
-	  core.[0-9][0-9][0-9] mon.out \
-	  lib$(BASEEXT).def perlmain.c \
-	  perl.exe so_locations \
-	  $(BASEEXT).exp 
+	  MYMETA.yml $(BASEEXT).x \
+	  $(BOOTSTRAP) perl$(EXE_EXT) \
+	  tmon.out *$(OBJ_EXT) \
+	  pm_to_blib $(INST_ARCHAUTODIR)/extralibs.ld \
+	  blibdirs.ts core.[0-9][0-9][0-9][0-9][0-9] \
+	  *perl.core core.*perl.*.? \
+	  $(MAKE_APERL_FILE) perl \
+	  $(BASEEXT).def core.[0-9][0-9][0-9] \
+	  mon.out lib$(BASEEXT).def \
+	  perlmain.c perl.exe \
+	  so_locations $(BASEEXT).exp 
 	- $(RM_RF) \
 	  blib 
 	- $(MV) $(FIRST_MAKEFILE) $(MAKEFILE_OLD) $(DEV_NULL)
@@ -870,9 +1135,21 @@ clean :: clean_subdirs
 
 	-$(RM_F) lib/Lineup.pm
 
+	-$(RM_F) grab/ch_search/tv_grab_ch_search
+
+	-$(RM_F) grab/uk_bleb/tv_grab_uk_bleb
+
+	-$(RM_F) grab/it/tv_grab_it
+
+	-$(RM_F) grab/it/tv_grab_it.in2
+
 	-$(RM_F) grab/na_dd/tv_grab_na_dd
 
 	-$(RM_F) grab/na_icons/tv_grab_na_icons
+
+	-$(RM_F) grab/fi/tv_grab_fi
+
+	-$(RM_F) grab/huro/tv_grab_huro
 
 
 # --- MakeMaker realclean_subdirs section:
@@ -904,27 +1181,39 @@ metafile : create_distdir
 	$(NOECHO) $(ECHO) 'build_requires:' >> META_new.yml
 	$(NOECHO) $(ECHO) '    ExtUtils::MakeMaker:  0' >> META_new.yml
 	$(NOECHO) $(ECHO) 'requires:' >> META_new.yml
-	$(NOECHO) $(ECHO) '    Date::Manip:        5.42' >> META_new.yml
-	$(NOECHO) $(ECHO) '    Date::Parse:        0' >> META_new.yml
-	$(NOECHO) $(ECHO) '    File::Slurp:        0' >> META_new.yml
-	$(NOECHO) $(ECHO) '    HTML::TokeParser:   0' >> META_new.yml
-	$(NOECHO) $(ECHO) '    HTML::TreeBuilder:  0' >> META_new.yml
-	$(NOECHO) $(ECHO) '    LWP:                5.65' >> META_new.yml
-	$(NOECHO) $(ECHO) '    Memoize:            0' >> META_new.yml
-	$(NOECHO) $(ECHO) '    SOAP::Lite:         0.67' >> META_new.yml
-	$(NOECHO) $(ECHO) '    Storable:           2.04' >> META_new.yml
-	$(NOECHO) $(ECHO) '    Term::ReadKey:      0' >> META_new.yml
-	$(NOECHO) $(ECHO) '    Time::Local:        0' >> META_new.yml
-	$(NOECHO) $(ECHO) '    WWW::Mechanize:     0' >> META_new.yml
-	$(NOECHO) $(ECHO) '    XML::LibXML:        0' >> META_new.yml
-	$(NOECHO) $(ECHO) '    XML::Parser:        2.34' >> META_new.yml
-	$(NOECHO) $(ECHO) '    XML::Twig:          3.28' >> META_new.yml
-	$(NOECHO) $(ECHO) '    XML::Writer:        0.6' >> META_new.yml
+	$(NOECHO) $(ECHO) '    Archive::Zip:         0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    CGI:                  0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    Date::Manip:          5.42' >> META_new.yml
+	$(NOECHO) $(ECHO) '    DateTime:             0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    DateTime::Format::ISO8601:  0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    DateTime::Format::Strptime:  0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    File::Slurp:          0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    File::Temp:           0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    HTML::Entities:       0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    HTML::Form:           0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    HTML::TokeParser:     0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    HTML::TreeBuilder:    0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    IO::Scalar:           0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    IO::Stringy:          0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    IO::Uncompress::Unzip:  0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    JSON:                 0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    LWP:                  0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    LWP::Simple:          0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    Memoize:              0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    SOAP::Lite:           0.67' >> META_new.yml
+	$(NOECHO) $(ECHO) '    Storable:             2.04' >> META_new.yml
+	$(NOECHO) $(ECHO) '    Term::ReadKey:        0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    Time::Local:          0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    WWW::Mechanize:       0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    XML::LibXML:          0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    XML::Parser:          2.34' >> META_new.yml
+	$(NOECHO) $(ECHO) '    XML::Twig:            0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    XML::Writer:          0.6' >> META_new.yml
 	$(NOECHO) $(ECHO) 'no_index:' >> META_new.yml
 	$(NOECHO) $(ECHO) '    directory:' >> META_new.yml
 	$(NOECHO) $(ECHO) '        - t' >> META_new.yml
 	$(NOECHO) $(ECHO) '        - inc' >> META_new.yml
-	$(NOECHO) $(ECHO) 'generated_by:       ExtUtils::MakeMaker version 6.55_02' >> META_new.yml
+	$(NOECHO) $(ECHO) 'generated_by:       ExtUtils::MakeMaker version 6.57_05' >> META_new.yml
 	$(NOECHO) $(ECHO) 'meta-spec:' >> META_new.yml
 	$(NOECHO) $(ECHO) '    url:      http://module-build.sourceforge.net/META-spec-v1.4.html' >> META_new.yml
 	$(NOECHO) $(ECHO) '    version:  1.4' >> META_new.yml
@@ -1328,12 +1617,24 @@ ppd :
 	$(NOECHO) $(ECHO) '    <ABSTRACT></ABSTRACT>' >> $(DISTNAME).ppd
 	$(NOECHO) $(ECHO) '    <AUTHOR></AUTHOR>' >> $(DISTNAME).ppd
 	$(NOECHO) $(ECHO) '    <IMPLEMENTATION>' >> $(DISTNAME).ppd
+	$(NOECHO) $(ECHO) '        <REQUIRE NAME="Archive::Zip" />' >> $(DISTNAME).ppd
+	$(NOECHO) $(ECHO) '        <REQUIRE NAME="CGI::" />' >> $(DISTNAME).ppd
 	$(NOECHO) $(ECHO) '        <REQUIRE NAME="Date::Manip" VERSION="5.42" />' >> $(DISTNAME).ppd
-	$(NOECHO) $(ECHO) '        <REQUIRE NAME="Date::Parse" />' >> $(DISTNAME).ppd
+	$(NOECHO) $(ECHO) '        <REQUIRE NAME="DateTime::" />' >> $(DISTNAME).ppd
+	$(NOECHO) $(ECHO) '        <REQUIRE NAME="DateTime::Format::ISO8601" />' >> $(DISTNAME).ppd
+	$(NOECHO) $(ECHO) '        <REQUIRE NAME="DateTime::Format::Strptime" />' >> $(DISTNAME).ppd
 	$(NOECHO) $(ECHO) '        <REQUIRE NAME="File::Slurp" />' >> $(DISTNAME).ppd
+	$(NOECHO) $(ECHO) '        <REQUIRE NAME="File::Temp" />' >> $(DISTNAME).ppd
+	$(NOECHO) $(ECHO) '        <REQUIRE NAME="HTML::Entities" />' >> $(DISTNAME).ppd
+	$(NOECHO) $(ECHO) '        <REQUIRE NAME="HTML::Form" />' >> $(DISTNAME).ppd
 	$(NOECHO) $(ECHO) '        <REQUIRE NAME="HTML::TokeParser" />' >> $(DISTNAME).ppd
 	$(NOECHO) $(ECHO) '        <REQUIRE NAME="HTML::TreeBuilder" />' >> $(DISTNAME).ppd
-	$(NOECHO) $(ECHO) '        <REQUIRE NAME="LWP::" VERSION="5.65" />' >> $(DISTNAME).ppd
+	$(NOECHO) $(ECHO) '        <REQUIRE NAME="IO::Scalar" />' >> $(DISTNAME).ppd
+	$(NOECHO) $(ECHO) '        <REQUIRE NAME="IO::Stringy" />' >> $(DISTNAME).ppd
+	$(NOECHO) $(ECHO) '        <REQUIRE NAME="IO::Uncompress::Unzip" />' >> $(DISTNAME).ppd
+	$(NOECHO) $(ECHO) '        <REQUIRE NAME="JSON::" />' >> $(DISTNAME).ppd
+	$(NOECHO) $(ECHO) '        <REQUIRE NAME="LWP::" />' >> $(DISTNAME).ppd
+	$(NOECHO) $(ECHO) '        <REQUIRE NAME="LWP::Simple" />' >> $(DISTNAME).ppd
 	$(NOECHO) $(ECHO) '        <REQUIRE NAME="Memoize::" />' >> $(DISTNAME).ppd
 	$(NOECHO) $(ECHO) '        <REQUIRE NAME="SOAP::Lite" VERSION="0.67" />' >> $(DISTNAME).ppd
 	$(NOECHO) $(ECHO) '        <REQUIRE NAME="Storable::" VERSION="2.04" />' >> $(DISTNAME).ppd
@@ -1342,9 +1643,9 @@ ppd :
 	$(NOECHO) $(ECHO) '        <REQUIRE NAME="WWW::Mechanize" />' >> $(DISTNAME).ppd
 	$(NOECHO) $(ECHO) '        <REQUIRE NAME="XML::LibXML" />' >> $(DISTNAME).ppd
 	$(NOECHO) $(ECHO) '        <REQUIRE NAME="XML::Parser" VERSION="2.34" />' >> $(DISTNAME).ppd
-	$(NOECHO) $(ECHO) '        <REQUIRE NAME="XML::Twig" VERSION="3.28" />' >> $(DISTNAME).ppd
+	$(NOECHO) $(ECHO) '        <REQUIRE NAME="XML::Twig" />' >> $(DISTNAME).ppd
 	$(NOECHO) $(ECHO) '        <REQUIRE NAME="XML::Writer" VERSION="0.6" />' >> $(DISTNAME).ppd
-	$(NOECHO) $(ECHO) '        <ARCHITECTURE NAME="x86_64-linux-gnu-thread-multi-5.10" />' >> $(DISTNAME).ppd
+	$(NOECHO) $(ECHO) '        <ARCHITECTURE NAME="x86_64-linux-gnu-thread-multi-5.14" />' >> $(DISTNAME).ppd
 	$(NOECHO) $(ECHO) '        <CODEBASE HREF="" />' >> $(DISTNAME).ppd
 	$(NOECHO) $(ECHO) '    </IMPLEMENTATION>' >> $(DISTNAME).ppd
 	$(NOECHO) $(ECHO) '</SOFTPKG>' >> $(DISTNAME).ppd

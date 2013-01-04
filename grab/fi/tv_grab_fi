@@ -1,336 +1,123 @@
 #!/usr/bin/perl -w
-
-=pod
-
-=head1 NAME
-
-tv_grab_fi - Grab TV listings for Finland.
-
-=head1 SYNOPSIS
-
-tv_grab_fi --help
-
-tv_grab_fi [--config-file FILE] --configure [--gui OPTION]
-
-tv_grab_fi [--config-file FILE] [--output FILE] [--days N]
-           [--offset N] [--quiet]
-
-tv_grab_fi --list-channels
-
-tv_grab_fi --capabilities
-
-tv_grab_fi --version
-
-=head1 DESCRIPTION
-
-Output TV listings for several channels available in Finland.
-The data comes from www.telkku.com. The grabber relies on parsing HTML
-so it might stop working at any time.
-
-First run B<tv_grab_fi --configure> to choose, which channels you want
-to download. Then running B<tv_grab_fi> with no arguments will output
-listings in XML format to standard output.
-
-B<--configure> Prompt for which channels,
-and write the configuration file.
-
-B<--config-file FILE> Set the name of the configuration file, the
-default is B<~/.xmltv/tv_grab_fi.conf>.  This is the file written by
-B<--configure> and read when grabbing.
-
-B<--gui OPTION> Use this option to enable a graphical interface to be used.
-OPTION may be 'Tk', or left blank for the best available choice.
-Additional allowed values of OPTION are 'Term' for normal terminal output
-(default) and 'TermNoProgressBar' to disable the use of XMLTV::ProgressBar.
-
-B<--output FILE> Write to FILE rather than standard output.
-
-B<--days N> Grab N days.  The default is 14 (22 days should be available).
-
-B<--offset N> Start N days in the future.  The default is to start
-from today.
-
-B<--quiet> Suppress the progress messages normally written to standard
-error.
-
-B<--list-channels> Write output giving <channel> elements for every
-channel available (ignoring the config file), but no programmes.
-
-B<--capabilities> Show which capabilities the grabber supports. For more
-information, see L<http://wiki.xmltv.org/index.php/XmltvCapabilities>
-
-B<--version> Show the version of the grabber.
-
-B<--help> Print a help message and exit.
-
-=head1 SEE ALSO
-
-L<xmltv(5)>.
-
-=head1 AUTHOR
-
-Officially maintained by Ville Ahonen (ville dot ahonen at iki dot fi), but in practice all recent fixes have been written by Stefan Becker. Based on previous version of tv_grab_fi by Matti Airas. 
-
-=head1 BUGS
-
-The data source does not include full channels information and the
-channels are identified by short names rather than the RFC2838 form
-recommended by the XMLTV DTD.
-
-=cut
-
-######################################################################
-# initializations
-
+# -*- mode: perl; coding: utf-8 -*- ###########################################
+#
+# Setup
+#
+###############################################################################
+use 5.008; # we process Unicode texts
 use strict;
-use XMLTV::Version '$Id: tv_grab_fi,v 1.65 2010/12/15 21:58:24 stefanb2 Exp $ ';
-use XMLTV::Capabilities qw/baseline manualconfig cache/;
-use XMLTV::Description 'Finland';
-use Encode qw(decode_utf8);
-use Getopt::Long;
-use Date::Manip;
-use HTML::Entities;
-use HTML::TreeBuilder;
-use POSIX qw(strftime tzset);
+use warnings;
+
+
+###############################################################################
+#
+#                   This is the merged version of the script.
+#
+#                !!! DO NOT EDIT - YOUR CHANGES WILL BE LOST !!!
+#
+#          Any changes should be done to the original modules instead.
+#
+###############################################################################
+package fi::common;
+use strict;
+use warnings;
+use base qw(Exporter);
+
+our @EXPORT      = qw(message debug fetchRaw fetchTree
+		      timeToEpoch fullTimeToEpoch);
+our @EXPORT_OK   = qw(setQuiet setDebug setTimeZone);
+our %EXPORT_TAGS = (
+		    main => [qw(message debug setQuiet setDebug setTimeZone)],
+		   );
+
+# Perl core modules
+use Carp;
+use Encode qw(decode);
+use POSIX qw(tzset);
 use Time::Local qw(timelocal);
 
-use XMLTV;
-use XMLTV::Memoize;
-use XMLTV::ProgressBar;
-use XMLTV::Ask;
-use XMLTV::Config_file;
-#use XMLTV::DST;
+# Other modules
+use HTML::TreeBuilder;
 use XMLTV::Get_nice;
-use XMLTV::Mode;
-use XMLTV::Date;
-# Todo: perhaps we should internationalize messages and docs?
-use XMLTV::Usage <<END
-$0: get Finnish television listings in XMLTV format
-To configure: $0 --configure [--config-file FILE]
-To grab listings: $0 [--config-file FILE] [--output FILE] [--days N]
-        [--offset N] [--quiet]
-To list channels: $0 --list-channels
-To show capabilities: $0 --capabilities
-To show version: $0 --version
-END
-  ;
 
-my $DOMAIN = 'telkku.com';
-my $SITE = "http://www.$DOMAIN";
-
-# Attributes of the root element in output.
-my $HEAD = { 'source-info-url'     => "$SITE/",
-	     'source-data-url'     => "$SITE/",
-	     'generator-info-name' => 'XMLTV',
-	     'generator-info-url'  => 'http://xmltv.org/',
-	   };
-
-# default language
-my $LANG="fi";
-
-# Global channel data.
-our @ch_all;
-
-
-######################################################################
-# get options
-
-# Get options, including undocumented --cache option.
-XMLTV::Memoize::check_argv('XMLTV::Get_nice::get_nice_aux');
-my ($opt_days, $opt_offset, $opt_help, $opt_output,
-    $opt_configure, $opt_config_file, $opt_gui,
-    $opt_quiet, $opt_list_channels);
-$opt_days  = 14; # default
-$opt_offset = 0; # default
-$opt_quiet  = 0; # default
-GetOptions('days=i'        => \$opt_days,
-	   'offset=i'      => \$opt_offset,
-	   'help'          => \$opt_help,
-	   'configure'     => \$opt_configure,
-	   'config-file=s' => \$opt_config_file,
-       'gui:s'         => \$opt_gui,
-	   'output=s'      => \$opt_output,
-	   'quiet'         => \$opt_quiet,
-	   'list-channels' => \$opt_list_channels,
-	  )
-  or usage(0);
-die 'number of days must not be negative'
-  if (defined $opt_days && $opt_days < 0);
-usage(1) if $opt_help;
-
-XMLTV::Ask::init($opt_gui);
-
-my $mode = XMLTV::Mode::mode('grab', # default
-			     $opt_configure => 'configure',
-			     $opt_list_channels => 'list-channels',
-			    );
-
-# File that stores which channels to download.
-my $config_file
-  = XMLTV::Config_file::filename($opt_config_file, 'tv_grab_fi', $opt_quiet);
-
-my @config_lines; # used only in grab mode
-if ($mode eq 'configure') {
-    XMLTV::Config_file::check_no_overwrite($config_file);
-}
-elsif ($mode eq 'grab') {
-    @config_lines = XMLTV::Config_file::read_lines($config_file);
-}
-elsif ($mode eq 'list-channels') {
-    # Config file not used.
-}
-else { die }
-
-# Whatever we are doing, we need the channels data.
-my %channels = get_channels(); # sets @ch_all
-my @channels;
-
-######################################################################
-# write configuration
-
-if ($mode eq 'configure') {
-    open(CONF, ">$config_file") or die "cannot write to $config_file: $!";
-
-    # Ask about each channel.
-    my @chs = sort keys %channels;
-    my @names = map { $channels{$_} } @chs;
-    my @qs = map { "add channel $_?" } @names;
-    my @want = ask_many_boolean(1, @qs);
-    foreach (@chs) {
-	my $w = shift @want;
-	warn("cannot read input, stopping channel questions"), last
-	  if not defined $w;
-	# No need to print to user - XMLTV::Ask is verbose enough.
-
-	# Print a config line, but comment it out if channel not wanted.
-	print CONF '#' if not $w;
-	my $name = shift @names;
-	print CONF "channel $_ $name\n";
-	# TODO don't store display-name in config file.
-    }
-
-    close CONF or warn "cannot close $config_file: $!";
-    say("Finished configuration.");
-
-    exit();
-}
-
-# Not configuration, we must be writing something, either full
-# listings or just channels.
-#
-die if $mode ne 'grab' and $mode ne 'list-channels';
-
-# Options to be used for XMLTV::Writer.
-my %w_args = (
-	      encoding => 'UTF-8',
-	     );	      ;
-if (defined $opt_output) {
-    open($w_args{OUTPUT}, ">:utf8", $opt_output)
-      or die "cannot write to $opt_output: $!";
-} else {
-    binmode(STDOUT, ":utf8");
-}
-my $writer = new XMLTV::Writer(%w_args);
-$writer->start($HEAD);
-
-if ($mode eq 'list-channels') {
-    # Write channels mode.
-    $writer->write_channel($_) foreach @ch_all;
-    $writer->end();
-    exit();
-}
-
-######################################################################
-# We are producing full listings.
-die if $mode ne 'grab';
-
-# Read configuration.
-my %title;
-my %description;
-my $line_num = 1;
-foreach (@config_lines) {
-    ++ $line_num;
-    next if not defined;
-
-    # XMLTV::Config::read_lines doesn't allow us to set the encoding
-    $_ = decode_utf8($_);
-
-    if (/^channel:?\s+(\S+)\s+([^\#]+)/) {
-	my $ch_did = $1;
-	my $ch_name = $2;
-	$ch_name =~ s/\s*$//;
-	push @channels, $ch_did;
-	$channels{$ch_did} = $ch_name;
-    }
-    elsif (/^series:?\s+title:?\s+([^\#]+)/) {
-	my $name = $1;
-	$name =~ s/\s*$//;
-	$title{$name}++;
-    }
-    elsif (/^series:?\s+description:?\s+([^\#]+)/) {
-	my $name = $1;
-	$name =~ s/\s*$//;
-	$description{$name}++;
-    }
-    else {
-	warn "$config_file:$line_num: bad line\n";
-    }
-}
-
-######################################################################
-# begin main program
-
-die "No channels specified, run me with --configure\n"
-  if not keys %channels;
-
-# Each page on telkku.com contains the program information
-# for one channel for one whole day.
-#
-# Example (compiled from several pages for illustration):
-#
-#  /- start time             (day)
-#  |     /- program title
-#  |     |
-# [23:45 Uutisikkuna         (yesterday)]
-#  00:10 Uutisikkuna         (today    )
-#  ...
-#  23:31 Uusi päivä          (today    )
-#  00:00 Kova laki           (tomorrow )
-# [00:40 Piilosana           (tomorrow )]
-# [01:00 Tellus-tietovisa    (tomorrow )]
-#
-# The lines in [] don't appear on every page.
+# Normal message, disabled with --quiet
 {
-  my @dates;
+  my $quiet = 0;
+  sub message(@)  { print STDERR "@_\n" unless $quiet }
+  sub setQuiet($) { ($quiet) = @_ }
+}
 
-  sub init_date_data() {
-    # Start one day before offset
-    my $date = DateCalc(parse_date('today'),
-			($opt_offset - 1) . " days") or die;
-
-    # End one day after offset + days
-    for (0..$opt_days+1) {
-      my($year, $month, $day) = split(':', UnixDate($date, "%Y:%m:%d"));
-      push(@dates, {
-		    day   => int($day),
-		    month => int($month),
-		    year  => int($year),
-		   });
-      $date  = DateCalc($date, "+1 day") or die;
+# Debug message, enabled with --debug
+{
+  my $debug = 0;
+  sub debug($@) {
+    my $level = shift;
+    print STDERR "@_\n" unless $debug < $level;
+  }
+  sub setDebug($) {
+    if (($debug) = @_) {
+      # Debug messages may contain Unicode
+      binmode(STDERR, ":utf8");
+      debug(1, "Debug level set to $debug.");
     }
   }
-
-  sub get_day($) {
-    my($index) = @_;
-    return(@dates[$index, $index + 1, $index + 2]);
-  }
 }
-init_date_data();
 
+# Fetch URL as UTF8 encoded string
+sub fetchRaw($;$$) {
+  my($url, $encoding, $nofail) = @_;
+  debug(2, "Fetching URL '$url'");
+  my $content;
+  my $retries = 5; # this seems to be enough?
+ RETRY:
+  while (1) {
+      eval {
+	  local $SIG{ALRM} = sub { die "Timeout" };
+
+	  # Default TCP timeouts are too long. If we don't get a response
+	  # within 20 seconds, then that's usually an indication that
+	  # something is really wrong on the server side.
+	  alarm(20);
+	  $content = get_nice($url);
+	  alarm(0);
+      };
+
+      unless ($@) {
+	  # Everything is OK
+	  $content = decode($encoding || "utf8", $content);
+	  last RETRY;
+      } elsif (($@ =~ /error: 500 Timeout/) && $retries--) {
+	  # Let's try this one more time
+	  carp "fetchRaw(): timeout. Retrying...";
+      } elsif ($nofail) {
+	  # Caller requested not to fail
+	  $content = "";
+	  last RETRY;
+      } else {
+	  # Fail on everything else
+	  croak "fetchRaw(): $@";
+      }
+  }
+  debug(5, $content);
+  return($content);
+}
+
+# Fetch URL as parsed HTML::TreeBuilder
+sub fetchTree($;$$) {
+  my($url, $encoding, $nofail) = @_;
+  my $content = fetchRaw($url, $encoding, $nofail);
+  my $tree = HTML::TreeBuilder->new();
+  local $SIG{__WARN__} = sub { carp("fetchTree(): $_[0]") };
+  $tree->parse($content) or croak("fetchTree() parse failure for '$url'");
+  $tree->eof;
+  return($tree);
+}
+
+#
 # Time zone handling
 #
-# Now that we have setup the day list we switch to a fixed time zone in order
-# to interpret the program start times from telkku.com. In this case we of
+# After setting up the day list we switch to a fixed time zone in order to
+# interpret the program start times from finnish sources. In this case we of
 # course use
 #
 #      Europe/Helsinki
@@ -427,116 +214,140 @@ init_date_data();
 # 1291161600: 01-Dec-2010 02:00:00 +0200 -> 01-Dec-2010 00:00:00 +0000
 #
 # Setup fixed time zone for program start time interpretation
-$ENV{TZ} = "Europe/Helsinki";
-tzset();
-
-# the order in which we fetch the channels matters
-my @to_get;
-foreach my $ch_did (@channels) {
-    my $ch_name=$channels{$ch_did};
-    my $ch_xid="$ch_did.$DOMAIN";
-    $writer->write_channel({ id => $ch_xid,
-			     'display-name' => [ [ $ch_name ] ] });
-    foreach my $i (0..$opt_days-1) {
-	push(@to_get, [ get_day($i), $ch_xid, $ch_did ]);
-    }
+sub setTimeZone() {
+  $ENV{TZ} = "Europe/Helsinki";
+  tzset();
 }
 
-# This progress bar is for both downloading and parsing.  Maybe
-# they could be separate stages.
-#
-my $bar = new XMLTV::ProgressBar( {
-   name => 'getting listings',
-   count => scalar @to_get,
- } ) if not $opt_quiet;
-foreach (@to_get) {
-    foreach (process_table(@{ $_ })) {
-	$writer->write_programme($_);
-    }
-    update $bar if not $opt_quiet;
-}
-$bar->finish() if not $opt_quiet;
-$writer->end();
-
-######################################################################
-# subroutine definitions
-
-# Use Log::TraceMessages if installed.
-BEGIN {
-    eval { require Log::TraceMessages };
-    if ($@) {
-	*t = sub {};
-	*d = sub { '' };
-    }
-    else {
-	*t = \&Log::TraceMessages::t;
-	*d = \&Log::TraceMessages::d;
-	Log::TraceMessages::check_argv();
-    }
+# Take a fi::day (day/month/year) and the program start time (hour/minute)
+# and convert it to seconds since Epoch in the current time zone
+sub timeToEpoch($$$) {
+  my($date, $hour, $minute) = @_;
+  return(timelocal(0, $minute, $hour,
+		   $date->day(), $date->month() - 1, $date->year()));
 }
 
-# Take a day (day/month/year) and the program start time (hour/minute)
-# and convert it to seconds since Epoch in the current time zone (see above)
-sub program_time_to_epoch($$) {
-  my($date, $program) = @_;
-  return(timelocal(0, $program->{minute}, $program->{hour},
-		   $date->{day}, $date->{month} - 1, $date->{year}));
+# Same thing but without fi::day object
+sub fullTimeToEpoch($$$$$) {
+  my($year, $month, $day, $hour, $minute) = @_;
+  return(timelocal(0, $minute, $hour, $day, $month - 1, $year));
 }
 
-####
-# process_table: fetch a URL and process it
-#
-# arguments:
-#    one URL can contain data from 3 days (previous/today/tomorrow)
-#    xmltv id of channel
-#    their id of channel
-#
-# returns: list of programme hashes to write
-#
-sub process_table {
-    my ($yesterday, $today, $tomorrow, $ch_xmltv_id, $ch_their_id) = @_;
-    my $url = "$SITE/channel/list/$ch_their_id/" .
-      sprintf("%04d%02d%02d", $today->{year}, $today->{month}, $today->{day});
-    t "getting URL: $url";
-    my $tree = get_nice_tree($url, \&decode_utf8);
-    local $SIG{__WARN__} = sub {
-	warn "$url: $_[0]";
-    };
+# That's all folks
+1;
 
-    my @program_data = get_program_data($tree);
+###############################################################################
+package fi::day;
+use strict;
+use warnings;
+use Carp;
+use Date::Manip qw(DateCalc ParseDate UnixDate);
 
-    # No data found -> return empty list
-    return unless @program_data;
+# Overload stringify operation
+use overload '""' => "ymd";
 
-    # Check for day crossing between first and second entry
-    my @dates = ($today, $tomorrow);
-    unshift(@dates, $yesterday)
-      if ((@program_data > 1) &&
-	  ($program_data[0]->{start} > $program_data[1]->{start}));
+# Constructor (private)
+sub _new {
+  my($class, $day, $month, $year) = @_;
 
+  my $self = {
+	      day   => $day,
+	      month => $month,
+	      year  => $year,
+	      ymd   => sprintf("%04d%02d%02d", $year, $month, $day),
+	      dmy   => sprintf("%02d.%02d.%04d", $day, $month, $year),
+	     };
 
-    my @r;
-    my $date          = shift(@dates);
-    my $current       = shift(@program_data);
-    my $current_start = $current->{start};
-    my $current_epoch = program_time_to_epoch($date, $current);
-    foreach my $next (@program_data) {
-
-      # Start of next program might be on the next day
-      my $next_start = $next->{start};
-      $date          = shift(@dates)
-	if $current_start > $next_start;
-      my $next_epoch = program_time_to_epoch($date, $next);
-
-      push(@r, make_programme_hash($ch_xmltv_id, $current,
-				   $current_epoch, $next_epoch));
-
-      $current       = $next;
-      $current_start = $next_start;
-      $current_epoch = $next_epoch;
-    }
-    return @r ;
+  return(bless($self, $class));
 }
+
+# instance methods
+sub day   { $_[0]->{day}   };
+sub dmy   { $_[0]->{dmy}   };
+sub month { $_[0]->{month} };
+sub year  { $_[0]->{year}  };
+sub ymd   { $_[0]->{ymd}   };
+
+# class methods
+sub generate {
+  my($class, $offset, $days) = @_;
+
+  # Start one day before offset
+  my $date = DateCalc(ParseDate("today"), ($offset - 1) . " days")
+    or croak("can't calculate start day");
+
+  # End one day after offset + days
+  my @dates;
+  for (0..$days + 1) {
+    my($year, $month, $day) = split(':', UnixDate($date, "%Y:%m:%d"));
+    push(@dates, $class->_new(int($day), int($month), int($year)));
+    $date  = DateCalc($date, "+1 day")
+      or croak("can't calculate next day");
+  }
+  return(\@dates);
+}
+
+# That's all folks
+1;
+
+###############################################################################
+package fi::programme;
+use strict;
+use warnings;
+use Carp;
+use POSIX qw(strftime);
+
+# Import from internal modules
+fi::common->import();
+
+sub _trim {
+  return unless defined($_[0]);
+  $_[0] =~ s/^\s+//;
+  $_[0] =~ s/\s+$//;
+}
+
+# Constructor
+sub new {
+  my($class, $channel, $language, $title, $start, $stop) = @_;
+  _trim($title);
+  croak "${class}::new called without valid title, start or stop"
+    unless defined($channel) && defined($title) && (length($title) > 0) &&
+           defined($start) && defined($stop);
+
+  my $self = {
+	      channel  => $channel,
+	      language => $language,
+	      title    => $title,
+	      start    => $start,
+	      stop     => $stop,
+	     };
+
+  return(bless($self, $class));
+}
+
+# instance methods
+sub category {
+  my($self, $category) = @_;
+  _trim($category);
+  $self->{category} = $category
+    if defined($category) && length($category);
+}
+sub description {
+  my($self, $description) = @_;
+  _trim($description);
+  $self->{description} = $description
+    if defined($description) && length($description);
+}
+sub episode {
+  my($self, $episode, $language) = @_;
+  _trim($episode);
+  if (defined($episode) && length($episode)) {
+    $episode =~ s/\.$//;
+    push(@{ $self->{episode} }, [$episode, $language]);
+  }
+}
+
+sub language { $_[0]->{language} }
 
 # Convert seconds since Epoch to XMLTV time stamp
 #
@@ -544,7 +355,7 @@ sub process_table {
 #       some XMLTV users, e.g. mythtv in the default configuration, ignore the
 #       XMLTV time zone value.
 #
-sub epoch_to_xmltv_time($) {
+sub _epoch_to_xmltv_time($) {
   my($time) = @_;
 
   # Unfortunately strftime()'s %z is not portable...
@@ -557,177 +368,1821 @@ sub epoch_to_xmltv_time($) {
   return(strftime("%Y%m%d%H%M00 +0", @time) . ($time[8] ? "3": "2") . "00");
 }
 
-sub make_programme_hash {
-    my ($ch_xmltv_id, $current, $start, $stop) = @_;
+# Configuration data
+my %series_description;
+my %series_title;
+my @title_map;
 
-    # XMLTV programme desciptor
-    my %prog = (
-		channel => $ch_xmltv_id,
-		start   => epoch_to_xmltv_time($start),
-		stop    => epoch_to_xmltv_time($stop),
-	       );
+sub dump {
+  my($self, $writer) = @_;
+  my $language    = $self->{language};
+  my $title       = $self->{title};
+  my $category    = $self->{category};
+  my $description = $self->{description};
+  my $subtitle    = $self->{episode};
 
-    # Check for series.
-    #
-    # Check 1: episode name of series in title.
-    # If title contains a colon (:), check to see if the string on the
-    # left-hand side of the colon has been defined as a series in the
-    # conf-file. If it has, assume that the string on the left-hand side
-    # of the colon is the name of the series, and the string on the
-    # right-hand side is the name of the episode. For example, if the
-    # following line has been defined in the tv_grab_fi.conf-file:
-    # "series title Prisma", and the title of the program is
-    # "Prisma: Totuus tappajadinosauruksista", then the script will assume
-    # that the title of the program is actually "Prisma", and the episode
-    # name/sub-title is "Totuus tappajadinosauruksista".
-    if (($current->{title} =~ m/([^:]+):\s*(.*)/) &&
-	(exists $title{$1})) {
-	my $new_title = $1;
-	my $episode = $2;
-	t "series $new_title, episode title $episode";
-	$prog{title}=[ [ $new_title, $LANG ] ];
-	$prog{'sub-title'} = [ [ $episode, $LANG ] ];
+  #
+  # Programme post-processing
+  #
+  # Title mapping
+  #
+  foreach my $map (@title_map) {
+    if ($map->($title)) {
+      debug(3, "XMLTV title '$self->{title}' mapped to '$title'");
+      last;
     }
-    else {
-	$prog{title}=[ [ $current->{title}, $LANG ] ];
-    }
-    # Check 2: episode name of series in description.
-    # Check if the program has a description. If so, also check if the title
-    # of the program has been defined as a series in the conf-file. If it
-    # has, assume that the first sentence (i.e. the text before the first
-    # period) marks the name of the episode. For example, if the following
-    # line has been defined in the tv_grab_fi.conf-file:
-    # "series description Batman", the title of of the program is "Batman",
-    # and the description of the program is "Pingviinin paluu. Amerikkalainen
-    # animaatiosarja. Outojen ryöstöjen sarja johdattaa Batmanin Pingviinin
-    # jäljille.", then the script will assume that the episode name/sub-title
-    # is "Pingviinin paluu", and that the description is actually
-    # "Amerikkalainen animaatiosarja. Outojen ryöstöjen sarja johdattaa
-    # Batmanin Pingviinin jäljille."
-    if ((defined $current->{description}) &&
-	(exists $description{$current->{title}})   &&
-	($current->{description} =~ s/^\s*([^.]+)\.\s*//)) {
-	my $episode = $1;
-	t "series $current->{title}, episode title $episode";
-	$prog{'sub-title'} = [ [ $episode, $LANG ] ];
+  }
 
-	# Make sure the description is not left empty
-	$current->{description} = "TBA" if ($current->{description} =~ /^\s*$/);
-    }
-    $prog{desc}=[ [ $current->{description}, $LANG ] ]
-      if defined $current->{description};
+  #
+  # Check 1: object already contains episode
+  #
+  my($left, $right);
+  if (defined($subtitle)) {
+    # nothing to be done
+  }
+  #
+  # Check 2: title contains episode name
+  #
+  # If title contains a colon (:), check to see if the string on the left-hand
+  # side of the colon has been defined as a series in the configuration file.
+  # If it has, assume that the string on the left-hand side of the colon is
+  # the name of the series and the string on the right-hand side is the name
+  # of the episode.
+  #
+  # Example:
+  #
+  #   config: series title Prisma
+  #   title:  Prisma: Totuus tappajadinosauruksista
+  #
+  # This will generate a program with
+  #
+  #   title:     Prisma
+  #   sub-title: Totuus tappajadinosauruksista
+  #
+  elsif ((($left, $right) = ($title =~ /([^:]+):\s*(.*)/)) &&
+	 (exists $series_title{$left})) {
+    debug(3, "XMLTV series title '$left' episode '$right'");
+    ($title, $subtitle) = ($left, $right);
+  }
+  #
+  # Check 3: description contains episode name
+  #
+  # Check if the program has a description. If so, also check if the title
+  # of the program has been defined as a series in the configuration. If it
+  # has, assume that the first sentence (i.e. the text before the first
+  # period, question mark or exclamation mark) marks the name of the episode.
+  #
+  # Example:
+  #
+  #   config:      series title Batman
+  #   description: Pingviinin paluu. Amerikkalainen animaatiosarja....
+  #
+  # This will generate a program with
+  #
+  #   title:       Batman
+  #   sub-title:   Pingviinin paluu.
+  #   description: Amerikkalainen animaatiosarja....
+  #
+  elsif ((defined $description)               &&
+	 (exists $series_description{$title}) &&
+         (($left, $right) = ($description =~ /^\s*([^.!?]+[.!?])\s*(.*)/))) {
+    # We only remove period from episode title, preserve others
+    $left =~ s/\.$//;
+    debug(3, "XMLTV series title '$title' episode '$left'");
+    ($subtitle, $description) = ($left, $right);
+  }
 
-    t "generated ($prog{start} -> " . (exists $prog{stop} ? $prog{stop} : "NO END") . ": $prog{title}->[0]->[0]";
+  # XMLTV programme desciptor (mandatory parts)
+  my %xmltv = (
+	       channel => $self->{channel},
+	       start   => _epoch_to_xmltv_time($self->{start}),
+	       stop    => _epoch_to_xmltv_time($self->{stop}),
+	       title   => [[$title, $language]],
+	      );
+  debug(3, "XMLTV programme '$xmltv{channel}' '$xmltv{start} -> $xmltv{stop}' '$title'");
 
-    return \%prog;
+  # XMLTV programme descriptor (optional parts)
+  if (defined($subtitle)) {
+    $subtitle = [[$subtitle, $language]]
+      unless ref($subtitle);
+    $xmltv{'sub-title'} = $subtitle;
+    debug(3, "XMLTV programme episode ($_->[1]): $_->[0]")
+      foreach (@{ $xmltv{'sub-title'} });
+  }
+  if (defined($category) && length($category)) {
+    $xmltv{category} = [[$category, $language]];
+    debug(4, "XMLTV programme category: $category");
+  }
+  if (defined($description) && length($description)) {
+    $xmltv{desc} = [[$description, $language]];
+    debug(4, "XMLTV programme description: $description");
+  }
+
+  $writer->write_programme(\%xmltv);
 }
 
-#####
-# All program info is contained within a unsorted list with class "programList"
-#
-# </div>
-#  <ul class="programList">
-#   <li>
-#    <span class="programDate"><a href="http://www.telkku.com/program/show/2010112621451">23:45&nbsp;Uutisikkuna</a></span><br />
-#    <span class="programDescription"></span>
-#   </li>
-#   ...
-#  </ul>
-#  <div ...
-#
-sub get_program_data {
-    my $tree = shift;
-    t "get_program_data() ENTRY for tree: $tree";
-    my @data;
-    # Dump the html-tree to a string for matching
-    my $html = $tree->as_HTML;
-    # We don't need the tree anymore
-    $tree->delete;
-    while ($html =~ m,<li><span class="programDate"><a href="$SITE/program/show/\d+">(\d{2}):(\d{2})&nbsp;(.+?)</a></span><br(?: \/)?><span class="programDescription">(.*?)</span>,go) {
-      # Use decode_entities() to convert html characters
-      # to ascii (e.g &auml; to ä)
-      my $hour        = $1;
-      my $minute      = $2;
-      my $start       = $hour * 60 + $minute; # minutes since midnight
-      my $title       = decode_entities($3);
-      my $description = decode_entities($4);
+# class methods
+# Parse config line
+sub parseConfigLine {
+  my($class, $line) = @_;
 
-      # Only record entry if title isn't empty
-      if (length($title) > 0) {
-	t "got programme starting at $start '$title'";
+  # Extract words
+  my($command, $keyword, $param) = split(' ', $line, 3);
 
-	# mandatory fields
-	my %program = (
-		       hour   => $hour,
-		       minute => $minute,
-		       start  => $start,
-		       title  => $title,
-		      );
+  if ($command eq "series") {
+    if ($keyword eq "description") {
+      $series_description{$param}++;
+    } elsif ($keyword eq "title") {
+      $series_title{$param}++;
+    } else {
+      # Unknown series configuration
+      return;
+    }
+  } elsif (($command eq "title") &&
+	   ($keyword eq "map")   &&
+	   # Accept "title" and 'title' for each parameter
+	   (my(undef, $from, undef, $to) =
+	    ($param =~ /^([\'\"])([^\1]+)\1\s+([\'\"])([^\3]+)\3/))) {
+    debug(3, "title mapping from '$from' to '$to'");
+    $from = qr/^\Q$from\E/;
+    push(@title_map, sub { $_[0] =~ s/$from/$to/ });
+  } else {
+    # Unknown command
+    return;
+  }
 
-	# optional fields
-	$program{description} = $description
-	  if length($description) > 0;
+  return(1);
+}
 
-	push(@data, \%program);
+# Fix overlapping programmes
+sub fixOverlaps {
+  my($class, $list) = @_;
+
+  # No need to cleanup empty/one-entry lists
+  return unless defined($list) && (@{ $list } >= 2);
+
+  my $current = $list->[0];
+  foreach my $next (@{ $list }[1..$#{ $list }]) {
+
+    # Does next programme start before current one ends?
+    if ($current->{stop} > $next->{start}) {
+      debug(3, "Fixing overlapping programme '$current->{title}' $current->{stop} -> $next->{start}.");
+      $current->{stop} = $next->{start};
+    }
+
+    # Next programme
+    $current = $next;
+  }
+}
+
+# That's all folks
+1;
+
+###############################################################################
+package fi::programmeStartOnly;
+use strict;
+use warnings;
+use base qw(Exporter);
+
+our @EXPORT = qw(startProgrammeList appendProgramme convertProgrammeList);
+
+# Import from internal modules
+fi::common->import();
+
+sub startProgrammeList() { return([]) }
+
+sub appendProgramme($$$$$$$) {
+  my($programmes, $hour, $minute, $title, $category, $description) = @_;
+
+  push(@{ $programmes }, {
+			  category    => $category,
+			  description => $description,
+			  hour        => $hour,
+			  minute      => $minute,
+			  # minutes since midnight
+			  start       => $hour * 60 + $minute,
+			  title       => $title,
+			 });
+}
+
+sub convertProgrammeList($$$$$$) {
+  my($programmes, $id, $language, $yesterday, $today, $tomorrow) = @_;
+
+  # No data found -> return empty list
+  return unless @{ $programmes };
+
+  # Check for day crossing between first and second entry
+  my @dates = ($today, $tomorrow);
+  if ((@{ $programmes } > 1) &&
+      ($programmes->[0]->{start} > $programmes->[1]->{start})) {
+
+    # Did caller specify yesterday?
+    if (defined $yesterday) {
+      unshift(@dates, $yesterday);
+    } else {
+      # No, assume the second entry is broken -> drop it
+      splice(@{ $programmes }, 1, 1);
+    }
+  }
+
+  my @objects;
+  my $date          = shift(@dates);
+  my $current       = shift(@{ $programmes });
+  my $current_start = $current->{start};
+  my $current_epoch = timeToEpoch($date, $current->{hour}, $current->{minute});
+  foreach my $next (@{ $programmes }) {
+
+    # Start of next program might be on the next day
+    my $next_start = $next->{start};
+    if ($current_start > $next_start) {
+
+      #
+      # Sanity check: try to detect fake day changes caused by broken data
+      #
+      # Incorrect date change example:
+      #
+      #   07:00 Voittovisa
+      #   07:50 Ostoskanava
+      #   07:20 F1 Ennakkolähetys       <-- INCORRECT DAY CHANGE
+      #   07:50 Dino, pikku dinosaurus
+      #   08:15 Superpahisten liiga
+      #
+      #   -> 07:50 (=  470) - 07:20 (=  440) =   30 minutes < 2 hours
+      #
+      # Correct date change example
+      #
+      #   22:35 Irene Huss: Tulitanssi
+      #   00:30 Formula 1: Extra
+      #
+      #   -> 22:35 (= 1355) - 00:30 (=   30) = 1325 minutes > 2 hours
+      #
+      # I grabbed the 2 hour limit out of thin air...
+      #
+      if ($current_start - $next_start > 2 * 60) {
+	$date = shift(@dates);
+
+	# Sanity check
+	unless ($date) {
+	  message("WARNING: corrupted data for $id on $today: two date changes detected. Ignoring data!");
+	  return([]);
+	}
+      } else {
+	message("WARNING: corrupted data for $id on $today: fake date change detected. Ignoring.");
       }
     }
 
-    t 'get_program_data() RETURNING ' . d \@data;
-    return @data;
+    my $next_epoch = timeToEpoch($date, $next->{hour}, $next->{minute});
+
+    # Create program object
+    debug(3, "Programme $id ($current_epoch -> $next_epoch) $current->{title}");
+    my $object = fi::programme->new($id, $language, $current->{title},
+				    $current_epoch, $next_epoch);
+    $object->category($current->{category});
+    $object->description($current->{description});
+    push(@objects, $object);
+
+    # Move to next program
+    $current       = $next;
+    $current_start = $next_start;
+    $current_epoch = $next_epoch;
+  }
+
+  return(\@objects);
 }
 
-# get channel listing
-sub get_channels {
-    my $bar = new XMLTV::ProgressBar({
-       name => 'getting list of channels',
-       count => 1,
-    } ) if not $opt_quiet;
+# That's all folks
+1;
 
-    my $url="$SITE/channel";
-    t "getting URL: $url";
-    my $tree = get_nice_tree($url, \&decode_utf8);
+###############################################################################
+package fi::source::mtv3;
+use strict;
+use warnings;
 
-    # FIXME commonize this
-    local $SIG{__WARN__} = sub {
-	warn "$url: $_[0]";
-    };
-    local $SIG{__DIE__} = sub {
-	die "$url: $_[0]";
-    };
+BEGIN {
+  our $ENABLED = 1;
+}
 
-    # All channels are listed in the left side bar within <li> tags
+# Import from internal modules
+fi::common->import();
+
+# Description
+sub description { 'mtv3.fi' }
+
+# Grab channel list
+sub channels {
+  my %channels;
+
+  # Fetch & parse HTML
+  my $root = fetchTree("http://www.mtv3.fi/tvopas/", "iso-8859-1");
+  if ($root) {
+
     #
-    # <div id="channelContainer">
-    #  <div id="channelList">
-    #   <div id="channelListHeader">
-    #	 <div id="channelListHeaderRight"></div>
-    #    <div id="channelListHeaderLeft"></div>
-    #    Kaikki kanavat
-    #   </div>
-    #   <ul>
-    #    <li><a href="http://telkku.com/channel/list/1/20101127">TV1</a></li>
-    #    ...
-    #   </ul>
-    #  </div>
-    #  <div id="channelContent">
+    # Channel list can be found from this dropdown:
+    #
+    # <select onchange="window.open(this.options[this.selectedIndex].value,'_self')">
+    #  <option value="#">Valitse kanava</option>
+    #  <option value="/tvopas/index.shtml">YLE1</option>
+    #  ...
+    #  <option value="/tvopas/muutkanavat.shtml">KinoTV</option>
+    #  <option value="/tvopas/muutkanavat.shtml">Digiviihde</option>
+    # </select>
+    #
+    if (my $container = $root->look_down("onchange" => qr/^window.open/)) {
+      if (my @options = $container->find("option")) {
+	my $count;
+	my $oldpage = "";
 
-    my $html = $tree->as_HTML;
-    # We don't need the tree anymore
-    $tree->delete;
-    my($trunc_html) = $html =~ m,<div id="channelContainer">.*</div><ul>(.*)</ul></div><div id="channelContent">,;
-    die "can't find channel information" unless defined $trunc_html;
+	debug(2, "Source mtv3.fi found " . scalar(@options) . " channels");
+	foreach my $option (@options) {
+	  my $id   = $option->attr("value");
+	  my $name = $option->as_text();
 
-    my %channels = ($trunc_html =~ m,<li><a href="$SITE/channel/list/(\d+)/\d+">(.+?)</a>,g);
-    die "no channels could be found" if not keys %channels;
+	  if (defined($id) &&
+	      (my($page) = ($id =~ m,^/tvopas/(\w+)\.shtml$,)) &&
+	      length($name)) {
+	    if ($page ne $oldpage) {
+	      $count   = 0;
+	      $oldpage = $page;
+	    }
+	    $count++;
+	    debug(3, "channel '$name' (${count}.${page})");
+	    $channels{"${count}.${page}.mtv3.fi"} = "fi $name";
+	  }
+	}
+      }
+    }
 
-    @ch_all = map { {
-		      'display-name' => [ [ $channels{$_}, $LANG ] ],
-		      id             => $_,
-		    } }
-              sort { $a <=> $b }
-	      keys %channels;
+    # Done with the HTML tree
+    $root->delete();
+  }
 
-    update $bar if not $opt_quiet;
-    $bar->finish() if not $opt_quiet;
-    return %channels;
+  debug(2, "Source mtv3.fi parsed " . scalar(keys %channels) . " channels");
+  return(\%channels);
 }
+
+# Parse time and convert to seconds since midnight
+sub _toEpoch($$) {
+  my($day, $time) = @_;
+  my($hour, $minute) = ($time =~ /^(\d{2}):(\d{2})$/);
+  return(timeToEpoch($day, $hour, $minute));
+}
+
+# Grab one day
+sub grab {
+  my($self, $id, $yesterday, $today, $tomorrow, $offset) = @_;
+
+  # Get channel number from XMLTV id
+  return unless my($channel, $page) = ($id =~ /^(\d+)\.([^.]+)\.mtv3\.fi$/);
+
+  # Fetch & parse HTML
+  my $root = fetchTree("http://www.mtv3.fi/tvopas/${page}.shtml/$today",
+		       "iso-8859-1");
+  if ($root) {
+    my @objects;
+
+    #
+    # Programmes for a channel can be found in a separate <td> node
+    #
+    # <table ... class="ohjelmisto" id="ohjelmisto">
+    #  <tr id="tvopas0400">
+    #  <td ... class="kanava1">
+    #   <div class="ohjelma uutiset"><span class="aika">04:00</span>
+    #    <a class="nimi" href="http://www.mtv3.fi/tvopas/ohjelma.shtml/yle1/20110212/1/uutisikkuna">Uutisikkuna</a>
+    #    <div class="clearall"></div>
+    #    <div class="seloste">
+    #     <div class="tvsel_aika">12.02.2011 klo 04:00-08:00</div>
+    #     <div class="tvsel_sarjateksti"></div>
+    #    </div>
+    #   </div>
+    #   ...
+    #  </td>
+    #
+    # First entry is always at $today.
+    #
+    # Each page contains the programmes for multiple channels. If you use the
+    # grabber for more than one channel from the same channel package then it
+    # is *HIGHLY* recommended to call the grabber with the --cache option to
+    # reduce network traffic!
+    #
+    if (my $container = $root->look_down("class" => "ohjelmisto")) {
+      my $day = $today;
+
+      if (my @cells = $container->look_down("_tag"  => "td",
+					    "class" => qr/^kanava${channel}$/)) {
+	foreach my $cell (@cells) {
+	  if (my @programmes = $cell->look_down("class" => qr/^ohjelma/)) {
+	    foreach my $programme (@programmes) {
+	      my $title = $programme->look_down("class" => "nimi");
+	      my $time  = $programme->look_down("class" => "tvsel_aika");
+
+	      if ($title && $time &&
+		  (my ($start, $end) =
+		   ($time->as_text() =~ /(\d{2}:\d{2})-(\d{2}:\d{2})$/))) {
+		$title = $title->as_text();
+
+		my($category) = ($programme->attr("class") =~ /^ohjelma\s+(.+)/);
+
+		my $desc = $programme->look_down("class" => "tvsel_kuvaus");
+		$desc    = $desc->as_text() if $desc;
+
+		$start   = _toEpoch($day, $start);
+		my $stop = _toEpoch($day, $end);
+		if ($stop < $start) {
+		  $day  = $tomorrow;
+		  $stop = _toEpoch($day, $end);
+		}
+
+		debug(3, "List entry ${channel}.${page} ($start -> $stop) $title");
+		debug(4, $desc) if defined $desc;
+
+		# Create program object
+		my $object = fi::programme->new($id, "fi", $title, $start, $stop);
+		$object->category($category);
+		$object->description($desc);
+
+		# Handle optional episode titles
+		if (my @episodes = $programme->look_down("class" => "tvsel_jaksonimi")) {
+
+		  # First episode title is in finnish, second is in english
+		  foreach my $language (qw(fi en)) {
+		    last unless my $episode = shift(@episodes);
+
+		    # Strip trailing period or parenthesis
+		    ($episode = $episode->as_text()) =~ s/\.\s*$//;
+		    $episode = $1 if ($episode =~ /^\s*\(\s*(.+)\s*\)\s*$/);
+
+		    # Set episode title if it is NOT the same as the title
+		    $object->episode($episode, $language)
+		      unless $episode eq $title;
+		  }
+		}
+
+		push(@objects, $object);
+	      }
+	    }
+	  }
+	}
+      }
+    }
+
+    # Done with the HTML tree
+    $root->delete();
+
+    # Fix overlapping programmes
+    fi::programme->fixOverlaps(\@objects);
+
+    return(\@objects);
+  }
+
+  return;
+}
+
+# That's all folks
+1;
+
+###############################################################################
+package fi::source::telkku;
+use strict;
+use warnings;
+
+BEGIN {
+  our $ENABLED = 1;
+}
+
+# Import from internal modules
+fi::common->import();
+fi::programmeStartOnly->import();
+
+# Description
+sub description { 'telkku.com' }
+
+# Grab channel list
+sub channels {
+
+  # Fetch & parse HTML
+  my $root = fetchTree("http://www.telkku.com/channel");
+  if ($root) {
+    my %channels;
+
+    #
+    # Channel list can be found from the left sidebar
+    #
+    # <div id="channelList">
+    #   ...
+    #   <ul>
+    #     <li><a href="http://www.telkku.com/channel/list/8/20101218">4 Sport</a></li>
+    #     <li><a href="http://www.telkku.com/channel/list/24/20101218">4 Sport Pro</a></li>
+    #     ...
+    #	  <li><a href="http://www.telkku.com/channel/list/87/20101218">Viron ETV</a></li>
+    #     <li><a href="http://www.telkku.com/channel/list/10/20101218">YLE Teema</a></li>
+    #   </ul>
+    # </div>
+    #
+    if (my $container = $root->look_down("id" => "channelList")) {
+      if (my @list = $container->find("li")) {
+	debug(2, "Source telkku.com found " . scalar(@list) . " channels");
+	foreach my $list_entry (@list) {
+	  if (my $link = $list_entry->find("a")) {
+	    my $href = $link->attr("href");
+	    my $name = $link->as_text();
+
+	    if (defined($href) && length($name) &&
+		(my($channel_no) = ($href =~ m,channel/list/(\d+)/,))) {
+	      debug(3, "channel '$name' ($channel_no)");
+	      $channels{"${channel_no}.telkku.com"} = "fi $name";
+	    }
+	  }
+	}
+      }
+    }
+
+    # Done with the HTML tree
+    $root->delete();
+
+    debug(2, "Source telkku.com parsed " . scalar(keys %channels) . " channels");
+    return(\%channels);
+  }
+
+  return;
+}
+
+#
+# http://www.telkku.com/movie contains information about (all?) movies for
+# today and the next 7 days, i.e. offsets 0 to 7. We extract the URL to the
+# detailed programme information (http://www.telkku.com/program/show/......)
+# that can then be used to identify movies when processing programme entries.
+#
+{
+  my %ids;
+
+  sub _getMovieIDsForOffset($) {
+    my($offset) = @_;
+
+    # There is only data for the next 7 days
+    return({}) if $offset > 7;
+
+    # Reuse cached data
+    return(\%ids) if %ids;
+
+    # In order to reduce website traffic, we only try this once
+    $ids{__DUMMY_ID_THAT_NEVER_MATCHES__}++;
+
+    # Fetch & parse HTML
+    # This is entirely optional, so please don't abort on failure...
+    my $root = fetchTree("http://www.telkku.com/movie", undef, 1);
+    if ($root) {
+      my $test;
+
+      #
+      # Document structure for movie entries:
+      #
+      # <div id="movieItems">
+      #   ...
+      #   <div class="movieItem">
+      #     <span class="heading">
+      #       <a href="http://www.telkku.fi/program/show/2011100211009">Aikuinen nainen</a>
+      #     </span>
+      #     ...
+      #   </div>
+      #   ...
+      # </div>
+      #
+      if (my @list = $root->look_down("class" => "movieItem")) {
+	debug(2, "Source telkku.com found " . scalar(@list) . " movies");
+	foreach my $list_entry (@list) {
+	  if (my $heading = $list_entry->look_down("class" => "heading")) {
+	    if (my $link = $heading->find("a")) {
+	      my $href = $link->attr("href");
+	      if (defined($href) && length($href)) {
+		debug(3, "movie ID: " . $href);
+		$ids{$href}++;
+	      }
+	    }
+	  }
+	}
+      }
+
+      # Done with the HTML tree
+      $root->delete();
+    }
+
+    debug(2, "Source telkku.com parsed " . (scalar(keys %ids) - 1) . " movies");
+    return(\%ids);
+  }
+}
+
+# Grab one day
+sub grab {
+  my($self, $id, $yesterday, $today, $tomorrow, $offset) = @_;
+
+  # Get channel number from XMLTV id
+  return unless my($channel) = ($id =~ /^(\d+)\.telkku\.com$/);
+
+  # Fetch & parse HTML
+  my $root = fetchTree("http://www.telkku.com/channel/list/$channel/$today");
+  if ($root) {
+    my $movie_ids = _getMovieIDsForOffset($offset);
+
+    #
+    # All program info is contained within a unsorted list with class "programList"
+    #
+    #  <ul class="programList">
+    #   <li>
+    #    <span class="programDate"><a href="http://www.telkku.com/program/show/2010112621451">23:45&nbsp;Uutisikkuna</a></span><br />
+    #    <span class="programDescription">...</span>
+    #   </li>
+    #   ...
+    #  </ul>
+    #
+    my $opaque = startProgrammeList();
+    if (my $container = $root->look_down("class" => "programList")) {
+      if (my @list = $container->find("li")) {
+	foreach my $list_entry (@list) {
+	  my $date = $list_entry->look_down("class", "programDate");
+	  my $desc = $list_entry->look_down("class", "programDescription");
+	  if ($date && $desc) {
+	    my $link = $date->find("a");
+	    if ($link) {
+
+	      # Extract texts from HTML elements. Entities are already decoded.
+	      $date = $link->as_text();
+	      $desc = $desc->as_text();
+
+	      # Use "." to match &nbsp; character (it's not included in \s?)
+	      if (my($hour, $minute, , $title) =
+		  $date =~ /^(\d{2}):(\d{2}).(.+)/) {
+		my $href     = $link->attr("href");
+		my $category = (defined($href) && exists($movie_ids->{$href})) ?
+		    "elokuvat" : undef;
+
+		debug(3, "List entry $channel ($hour:$minute) $title");
+		debug(4, $desc);
+		debug(4, $category) if defined $category;
+
+		# Only record entry if title isn't empty
+		appendProgramme($opaque, $hour, $minute, $title, $category,
+				$desc)
+		  if length($title) > 0;
+	      }
+	    }
+	  }
+	}
+      }
+    }
+
+    # Done with the HTML tree
+    $root->delete();
+
+    # Each page on telkku.com contains the program information
+    # for one channel for one whole day.
+    #
+    # Example (compiled from several pages for illustration):
+    #
+    #  /- start time             (day)
+    #  |     /- program title
+    #  |     |
+    # [23:45 Uutisikkuna         (yesterday)]
+    #  00:10 Uutisikkuna         (today    )
+    #  ...
+    #  23:31 Uusi päivä          (today    )
+    #  00:00 Kova laki           (tomorrow )
+    # [00:40 Piilosana           (tomorrow )]
+    # [01:00 Tellus-tietovisa    (tomorrow )]
+    #
+    # The lines in [] don't appear on every page.
+    #
+    # Convert list to program objects
+    return(convertProgrammeList($opaque, $id, "fi",
+				$yesterday, $today, $tomorrow));
+  }
+
+  return;
+}
+
+# That's all folks
+1;
+
+###############################################################################
+package fi::source::telvis;
+use strict;
+use warnings;
+
+BEGIN {
+  our $ENABLED = 1;
+}
+
+# Import from internal modules
+fi::common->import();
+fi::programmeStartOnly->import();
+
+# Description
+sub description { 'telvis.fi' }
+
+# Grab channel list
+sub channels {
+  my %channels;
+
+  # Fetch & parse HTML
+  my $root = fetchTree("http://www.telvis.fi/tvohjelmat/?vw=channel");
+  if ($root) {
+
+    #
+    # Channel list can be found in multiple <div> nodes
+    #
+    # <div class="progs" style="text-align:left;">
+    #  <a href="/tvohjelmat/?vw=channel&ch=tv1&sh=new&dy=03.02.2011">YLE TV1</a>
+    #  <a href="/tvohjelmat/?vw=channel&ch=tv2&sh=new&dy=03.02.2011">YLE TV2</a>
+    #  ...
+    # </div>
+    #
+    if (my @containers = $root->look_down("class" => "progs")) {
+      foreach my $container (@containers) {
+	if (my @refs = $container->find("a")) {
+	  debug(2, "Source telvis.fi found " . scalar(@refs) . " channels");
+	  foreach my $ref (@refs) {
+	    my $href = $ref->attr("href");
+	    my $name = $ref->as_text();
+
+	    if (defined($href) && length($name) &&
+		(my($id) = ($href =~ m,vw=channel&ch=([^&]+)&,))) {
+	      debug(3, "channel '$name' ($id)");
+	      $channels{"${id}.telvis.fi"} = "fi $name";
+	    }
+	  }
+	}
+      }
+    }
+
+    # Done with the HTML tree
+    $root->delete();
+
+  } else {
+    return;
+  }
+
+  debug(2, "Source telvis.fi parsed " . scalar(keys %channels) . " channels");
+  return(\%channels);
+}
+
+# Grab one day
+sub grab {
+  my($self, $id, $yesterday, $today, $tomorrow, $offset) = @_;
+
+  # Get channel number from XMLTV id
+  return unless my($channel) = ($id =~ /^([^.]+)\.telvis\.fi$/);
+
+  # Fetch & parse HTML
+  my $root = fetchTree("http://www.telvis.fi/lite/?vw=channel&ch=${channel}&dy=" . $today->dmy(),
+		       "iso-8859-1");
+  if ($root) {
+    #
+    # Each programme can be found in a separate <tr> node under a <div> node
+    #
+    # <div class="tm">
+    #  <table>
+    #   ...
+    #   <tr>
+    #    <td valign="top"><strong>13:50</strong></td>
+    #    <td><strong>Serranon perhe</strong>&nbsp;
+    #     Suuret sanat suuta halkovat. Diego kertoo perheelleen suhteestaan Celiaan. Reaktiot pistävät miehelle jauhot suuhun. Ana pyytää Fitiltä palvelusta, josta tämä on otettu. Santi hoitaa Lourditasin asioita omin päin.
+    #    </td>
+    #   </tr>
+    #   <tr class="zeb">
+    #    <td valign="top"><strong>15:15</strong></td>
+    #    <td><strong>Gilmoren tytöt</strong>&nbsp;
+    #     Välirikko. Emily yrittää tuoda Christopherin takaisin perheensä piiriin, mutta Rory on saanut aina poissaolevasta isästä tarpeekseen. Lorelaita piirittää jälleen uusi ihailija.
+    #    </td>
+    #   </tr>
+    #   ...
+    #  </table>
+    # </div>
+    #
+    my $opaque = startProgrammeList();
+    if (my $container = $root->look_down("class" => "tm")) {
+      if (my @rows = $container->find("tr")) {
+	foreach my $row (@rows) {
+	  my @columns = $row->find("td");
+	  if (@columns == 2) {
+	    my $start = $columns[0]->find("strong");
+	    my $title = $columns[1]->find("strong");
+	    if ($start && $title) {
+	      $start = $start->as_text();
+	      $title = $title->as_text();
+	      if (my($hour, $minute) = ($start =~ /^(\d{2}):(\d{2})/)) {
+		my $desc  = $columns[1]->as_text(); # includes $title
+		$desc =~ s/^\Q$title\E\s+//;
+		debug(3, "List entry $channel ($hour:$minute) $title");
+		debug(4, $desc);
+
+		# Only record entry if title isn't empty
+		appendProgramme($opaque, $hour, $minute, $title, undef, $desc)
+		  if length($title) > 0;
+	      }
+	    }
+	  }
+	}
+      }
+    }
+
+    # Done with the HTML tree
+    $root->delete();
+
+    # Convert list to program objects
+    #
+    # First entry always starts on $today -> don't use $yesterday
+    # Last entries always end on $tomorrow
+    #
+    # Unfortunately the last entry of $today is not the first entry of
+    # $tomorrow. That means that the last entry will always be missing as we
+    # don't have a stop time for it :-(
+    return(convertProgrammeList($opaque, $id, "fi",
+				undef, $today, $tomorrow));
+  }
+
+  return;
+}
+
+# That's all folks
+1;
+
+###############################################################################
+package fi::source::tvnyt;
+use strict;
+use warnings;
+
+BEGIN {
+  our $ENABLED = 1;
+}
+
+use Carp;
+use HTML::Entities qw(decode_entities);
+use JSON qw(-support_by_pp); # enable allow_barekey() for JSON:XS
+
+# Import from internal modules
+fi::common->import();
+
+# Description
+sub description { 'tvnyt.fi' }
+
+# Copied from Javascript code. No idea why we should do this...
+sub _timestamp() {
+  # This obviously breaks caching. Use constant value instead
+  #return("timestamp=" . int(rand(10000)));
+  return("timestamp=0");
+}
+
+# Grab channel list
+sub channels {
+
+  # Fetch JavaScript code as raw file
+  my $content = fetchRaw("http://www.tvnyt.fi/ohjelmaopas/wp_channels.js?" . _timestamp());
+  if (length($content)) {
+    my $count = 0;
+    # 1) pattern match JS arrays (example: ["1","TV1","tv1.gif"] -> 1, "TV1")
+    # 2) even entries in the list are converted to XMLTV ID
+    # 3) fill hash from list (even -> key [id], odd -> value [name])
+    my %channels = (
+		    map { ($count++ % 2) == 0 ? "$_.tvnyt.fi" : "fi $_" }
+		      $content =~ /\["(\d+)","([^\"]+)","[^\"]+"\]/g
+		   );
+    debug(2, "Source tvnyt.fi parsed " . scalar(keys %channels) . " channels");
+    return(\%channels);
+  }
+
+  return;
+}
+
+# Parse time stamp and convert to Epoch using local time zone
+#
+# Example time stamp: 20101218040000
+#
+sub _toEpoch($) {
+  my($string) = @_;
+  return unless defined($string);
+  return unless my($year, $month, $day, $hour, $minute) =
+    ($string =~ /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})\d{2}$/);
+  return(fullTimeToEpoch($year, $month, $day, $hour, $minute));
+}
+
+# Category number to name map
+my %category_map = (
+		    0 => undef,
+		    1 => "dokumentit",
+		    2 => "draama",
+		    3 => "lapset",
+		    4 => "uutiset",
+		    5 => "urheilu",
+		    6 => "vapaa aika",
+		   );
+
+# Grab one day
+sub grab {
+  my($self, $id, $yesterday, $today, $tomorrow, $offset) = @_;
+
+  # Get channel number from XMLTV id
+  return unless my($channel) = ($id =~ /^(\d+)\.tvnyt\.fi$/);
+
+  # Fetch JavaScript code as raw file
+  my $content = fetchRaw("http://www.tvnyt.fi/ohjelmaopas/getChannelPrograms.aspx?channel=$channel&start=${today}0000&" . _timestamp());
+  if (length($content)) {
+    # Accept "x:.." instead of the correct "'x':..."
+    my $parser = JSON->new()->allow_barekey();
+
+    # Fixup data
+    $content =~ s/\\/\\\\/g; # some string contain illegal escapes
+
+    # Parse data
+    my $data   = eval {
+      $parser->decode($content)
+    };
+    croak "JSON parse error: $@" if $@;
+    undef $parser;
+
+    #
+    # Program information is encoded in JSON:
+    #
+    # {
+    #  1: [
+    #      {
+    #       id:       "17111541",
+    #       desc:     "&#x20;",
+    #       title:    "Uutisikkuna",
+    #       category: "0",
+    #       start:    "20101218040000",
+    #       stop:     "20101218080000"
+    #      },
+    #      ...
+    #     ]
+    # }
+    #
+    # - the first entry always starts on $today.
+    # - the last entry is a duplicate of the first entry on $tomorrow. We drop
+    #   it to avoid duplicate programme entries.
+    #
+    # Category types:
+    #
+    #   0 - unknown
+    #   1 - dokumentit (documentary)
+    #   2 - draama     (drama)
+    #   3 - lapset     (children)
+    #   4 - uutiset    (news)
+    #   5 - urheilu    (sports)
+    #   6 - vapaa aika (recreational)
+    #
+    # Verify top-level of data structure
+    if ((ref($data) eq "HASH") &&
+	(exists $data->{1})    &&
+	(ref($data->{1}) eq "ARRAY")) {
+
+      my @objects;
+      foreach my $array_entry (@{ $data->{1} }) {
+	my $start = $array_entry->{start};
+	my $stop  = $array_entry->{stop};
+	my $title = decode_entities($array_entry->{title});
+	my $desc  = decode_entities($array_entry->{desc});
+
+	# Sanity check
+	# Drop "no programm" entries
+	if (($start = _toEpoch($start)) &&
+	    ($stop  = _toEpoch($stop))  &&
+	    length($title)              &&
+	    ($title ne "Ei ohjelmaa.")) {
+	  my $category = $array_entry->{category};
+
+	  debug(3, "List entry $channel ($start -> $stop) $title");
+	  debug(4, $desc);
+
+	  # Map category number to name
+	  $category = $category_map{$category} if defined($category);
+
+	  # Create program object
+	  my $object = fi::programme->new($id, "fi", $title, $start, $stop);
+	  $object->category($category);
+	  $object->description($desc);
+	  push(@objects, $object);
+	}
+      }
+
+      # Drop last entry
+      pop(@objects);
+
+      # Fix overlapping programmes
+      fi::programme->fixOverlaps(\@objects);
+
+      return(\@objects);
+    }
+  }
+
+  return;
+}
+
+# That's all folks
+1;
+
+###############################################################################
+package fi::source::yle;
+use strict;
+use warnings;
+
+BEGIN {
+  our $ENABLED = 1;
+}
+
+# Import from internal modules
+fi::common->import();
+fi::programmeStartOnly->import();
+
+# Description
+sub description { 'yle.fi' }
+
+# yle.fi offers program guides in multiple languages
+#                language URL attribute
+#                |      XMLTV language code
+#                |      |
+my %languages = (
+		 fi => "fi",
+		 se => "sv",
+		);
+
+# Grab channel list
+sub channels {
+  my %channels;
+
+  # For each language
+  while (my($language, $code) = each %languages) {
+
+    # Fetch & parse HTML
+    my $root = fetchTree("http://ohjelmaopas.yle.fi/?lang=$language");
+    if ($root) {
+
+      #
+      # Channel list can be found from this dropdown:
+      #
+      # <select name="week" id="viikko_dropdown" class="dropdown">
+      #   <option value="">Valitse kanava</option>
+      #   <option value="tv1">YLE TV1</option>
+      #   ...
+      #   <option value="tvf">TV Finland (CET)</option>
+      # </select>
+      #
+      if (my $container = $root->look_down("id" => "viikko_dropdown")) {
+	if (my @options = $container->find("option")) {
+	  debug(2, "Source ${language}.yle.fi found " . scalar(@options) . " channels");
+	  foreach my $option (@options) {
+	    my $id   = $option->attr("value");
+	    my $name = $option->as_text();
+
+	    if (defined($id) && length($id) && length($name)) {
+	      debug(3, "channel '$name' ($id)");
+	      $channels{"${id}.${language}.yle.fi"} = "$code $name";
+	    }
+	  }
+	}
+      }
+
+      # Done with the HTML tree
+      $root->delete();
+
+    } else {
+      return;
+    }
+  }
+
+  debug(2, "Source yle.fi parsed " . scalar(keys %channels) . " channels");
+  return(\%channels);
+}
+
+# Category map
+my $category_map;
+
+# Parse categories and compile map
+#
+# <div id="aihe_list">
+#  <a href="#" style='color:#29a8db;'" class="aihe_linkki" id="aihe_linkki_0">Kaikki</a>
+#  <a href="#" " class="aihe_linkki" id="aihe_linkki_1">Uutiset</a>
+#  <a href="#" " class="aihe_linkki" id="aihe_linkki_2">Ajankohtais</a>
+#  ...
+#  <a href="#" " class="aihe_linkki" id="aihe_linkki_10">Viihde ja musiikki</a>
+# </div>
+sub _parseCategories($$) {
+  my($root, $language) = @_;
+  if (my $container = $root->look_down("id" => "aihe_list")) {
+    if (my @hrefs = $container->find("a")) {
+      debug(2, "Source ${language}.yle.fi found " . scalar(@hrefs) . " categories");
+      foreach my $href (@hrefs) {
+	my $id   = $href->attr("id");
+	my $name = $href->as_text();
+
+	# Ignore category 0 (kaikki)
+	my $category;
+	if (defined($id)                                   &&
+	    (($category) = ($id =~ /^aihe_linkki_(\d+)$/)) &&
+	    $category                                      &&
+	    length($name)) {
+	  debug(3, "category $language '$name' ($category)");
+	  $category_map->{$language}->{$category} = $name;
+	}
+      }
+    }
+  }
+  return($category_map->{$language});
+}
+
+# Grab one day
+sub grab {
+  my($self, $id, $yesterday, $today, $tomorrow, $offset) = @_;
+
+  # Get channel number from XMLTV id
+  return unless my($channel, $language) = ($id =~ /^([^.]+)\.([^.]+)\.yle\.fi$/);
+
+  # Select language
+  return unless exists $languages{$language};
+  my $code = $languages{$language};
+
+  # Fetch & parse HTML
+  my $root = fetchTree("http://ohjelmaopas.yle.fi/?lang=$language&groups=$channel&d=$today");
+  if ($root) {
+    my $map = $category_map->{$language};
+
+    # Only parse category list once
+    $map = _parseCategories($root, $language) unless defined $map;
+
+    #
+    # Each programme can be found in a separate <div> node
+    #
+    # The class is a combination of
+    #     programme - literal
+    #     clear     - encryption?
+    #    (onair)    - this programme is currently on the air
+    #     catN      - category type?
+    #
+    #  <div class="programme clear  onair cat1" style="">
+    #    <div class="start">18.00</div>
+    #    <div class="title">
+    #      <a href="?show=tv1201012151800" class="programmelink" id="link_tv11800">Kuuden Tv-uutiset ja sää</a>
+    #    </div><br />
+    #    <div class="desc" id="desc_tv11800">
+    #      <span class="desc_title">Kuuden Tv-uutiset ja sää</span>
+    #      <span class="desc_time">
+    #        YLE TV1        18.00 -
+    #        18.30
+    #      </span>
+    #      Mukana talous kulttuuri ja urheilu.<br />
+    #      <a ...</a>
+    #    </div>
+    #  </div>
+    #
+    # - first entry always starts on $today
+    # - last entry always ends on $tomorrow
+    # - the end time in "desc_time" is unfortunately unreliable and leads to
+    #   overlapping programme entries. We only use it for the last entry.
+    #
+    my $opaque = startProgrammeList();
+    if (my @programmes = $root->look_down("class" => qr/^programme\s+/)) {
+      my($last_hour, $last_minute);
+
+      foreach my $programme (@programmes) {
+	my $start = $programme->look_down("class", "start");
+	my $title = $programme->look_down("class", "programmelink");
+	my $desc  = $programme->look_down("class", "desc");
+	my $time  = $programme->look_down("class", "desc_time");
+
+	if ($start && $title && $desc && $time) {
+	  $start = join("", $start->content_list());
+	  $title = join("", $title->content_list());
+	  $time  = join("", $time->content_list());
+
+	  # Extract text elements from desc (why is this so complicated?)
+	  $desc = join("", grep { not ref($_) } $desc->content_list());
+	  $desc =~ s/^\s+//;
+	  $desc =~ s/\s+$//;
+
+	  # Sanity checks
+	  if ((my($hour, $minute) = ($start =~ /^(\d{2})\.(\d{2})/)) &&
+	      (($last_hour, $last_minute) =
+	       ($time =~ /\d{2}\.\d{2}\s+-\s+(\d{2})\.(\d{2})/))     &&
+	      length($title)) {
+	    my($category) = $programme->attr("class") =~ /cat(\d+)/
+	      if defined $map;
+	    $category = $map->{$category}
+	      if defined $category;
+
+	    debug(3, "List entry $channel ($hour:$minute) $title");
+	    debug(4, $category) if defined $category;
+	    debug(4, $desc);
+
+	    # Add programme
+	    appendProgramme($opaque, $hour, $minute, $title, $category, $desc);
+	  }
+	}
+      }
+
+      # Add dummy entry to define stop time for last entry
+      # Check for special case "24:00"
+      appendProgramme($opaque, $last_hour == 24 ? 0 : $last_hour,
+		      $last_minute, "", undef, undef)
+	if defined $last_hour;
+    }
+
+    # Done with the HTML tree
+    $root->delete();
+
+    # Convert list to program objects
+    # First entry always starts $today -> don't use $yesterday
+    return(convertProgrammeList($opaque, $id, $code,
+				undef, $today, $tomorrow));
+  }
+
+  return;
+}
+
+# That's all folks
+1;
+
+###############################################################################
+###############################################################################
+package main;
+
+# Perl core modules
+use Getopt::Long;
+use Pod::Usage;
+
+
+# Generate source module list
+my @sources;
+BEGIN {
+  @sources = map { s/::$//; $_ }
+    map { "fi::source::" . $_ }
+    sort
+    grep { ${ $::{'fi::'}->{'source::'}->{$_}->{ENABLED} } }
+    keys %{ $::{'fi::'}->{'source::'} };
+  die "$0: couldn't find any source modules?" unless @sources;
+}
+
+# Import from internal modules
+fi::common->import(':main');
+
+# Basic XMLTV modules
+use XMLTV::Version "generated from\n\ttv_grab_fi.pl              2.01   2011/10/10  16:38:57\n\tcommon.pm                  2.01   2011/10/10  16:38:57\n\tday.pm                     2.00   2011/03/10  21:20:11\n\tprogramme.pm               2.00   2011/03/10  21:20:11\n\tprogrammeStartOnly.pm      2.00   2011/03/10  21:20:11\n\tmtv3.pm                    2.01   2011/10/10  16:38:57\n\ttelkku.pm                  2.01   2011/10/10  16:38:57\n\ttelvis.pm                  2.02   2011/10/10  16:38:57\n\ttvnyt.pm                   2.02   2011/10/10  16:38:57\n\tyle.pm                     2.01   2011/10/10  16:38:57";
+use XMLTV::Capabilities qw(baseline manualconfig cache);
+use XMLTV::Description 'Finland (' .
+  join(', ', map { $_->description() } @sources ) .
+  ')';
+
+# NOTE: We will only reach the rest of the code only when the script is called
+#       without --version, --capabilities or --description
+# Reminder of XMLTV modules
+use XMLTV::Get_nice;
+use XMLTV::Memoize;
+
+###############################################################################
+#
+# Main program
+#
+###############################################################################
+# Forward declarations
+sub doConfigure();
+sub doListChannels();
+sub doGrab();
+
+# Command line option default values
+my %Option = (
+	      days   => 14,
+	      quiet  =>  0,
+	      debug  =>  0,
+	      offset =>  0,
+	     );
+
+# Enable caching. This will remove "--cache [file]" from @ARGV
+XMLTV::Memoize::check_argv('XMLTV::Get_nice::get_nice_aux');
+
+# Process command line options
+if (GetOptions(\%Option,
+	       "configure",
+	       "config-file=s",
+	       "days=i",
+	       "debug|d+",
+	       "gui:s",
+	       "help|h|?",
+	       "list-channels",
+	       "offset=i",
+	       "output=s",
+	       "quiet")) {
+
+  pod2usage(-exitstatus => 0,
+	    -verbose => 2)
+    if $Option{help};
+
+  setDebug($Option{debug});
+  setQuiet($Option{quiet});
+
+  if ($Option{configure}) {
+    # Configure mode
+    doConfigure();
+
+  } elsif ($Option{'list-channels'}) {
+    # List channels mode
+    doListChannels();
+
+  } else {
+    # Grab mode (default)
+    doGrab();
+  }
+} else {
+  pod2usage(2);
+}
+
+# That's all folks
+exit 0;
+
+###############################################################################
+#
+# Utility functions for the different modes
+#
+###############################################################################
+sub _getConfigFile() {
+  require XMLTV::Config_file;
+  return(XMLTV::Config_file::filename($Option{'config-file'},
+				      "tv_grab_fi",
+				      $Option{quiet}));
+}
+
+{
+  my $ofh;
+
+  sub _createXMLTVWriter() {
+
+    # Output file handling
+    $ofh = \*STDOUT;
+    if (defined $Option{output}) {
+      open($ofh, ">", $Option{output})
+	or die "$0: cannot open file '$Option{output}' for writing: $!";
+    }
+
+    # Create XMLTV writer for UTF-8 encoded text
+    binmode($ofh, ":utf8");
+    my $writer = XMLTV::Writer->new(
+				    encoding => 'UTF-8',
+				    OUTPUT   => \*STDOUT,
+				   );
+
+    #### HACK CODE ####
+    $writer->start({
+		    "generator-info-name" => "XMLTV",
+		    "generator-info-url"  => "http://xmltv.org/",
+		    "source-info-url"     => "multiple", # TBA
+		    "source-data-url"     => "multiple", # TBA
+		   });
+    #### HACK CODE ####
+
+    return($writer);
+  }
+
+  sub _closeXMLTVWriter($) {
+    my($writer) = @_;
+    $writer->end();
+
+    # close output file
+    if ($Option{output}) {
+      close($ofh) or die "$0: write error on file '$Option{output}': $!";
+    }
+    message("DONE");
+  }
+}
+
+sub _addChannel($$$$) {
+  my($writer, $id, $name, $language) = @_;
+  $writer->write_channel({
+			  id             => $id,
+			  'display-name' => [[$name, $language]],
+			 });
+}
+
+{
+  my $bar;
+
+  sub _createProgressBar($$) {
+    my($label, $count) = @_;
+    return if $Option{quiet};
+
+    require XMLTV::Ask;
+    require XMLTV::ProgressBar;
+    XMLTV::Ask::init($Option{gui});
+    $bar = XMLTV::ProgressBar->new({
+				    name  => $label,
+				    count => $count,
+				   });
+  }
+
+  sub _updateProgressBar()  { $bar->update() if defined $bar }
+  sub _destroyProgressBar() { $bar->finish() if defined $bar }
+}
+
+sub _getChannels($$) {
+  my($callback, $opaque) = @_;
+
+  # Get channels from all sources
+  _createProgressBar("getting list of channels", @sources);
+  foreach my $source (@sources) {
+    debug(1, "requesting channel list from source '" . $source->description ."'");
+    if (my $list = $source->channels()) {
+      while (my($id, $value) = each %{ $list }) {
+	my($language, $name) = split(" ", $value, 2);
+	$callback->($opaque, $id, $name, $language);
+      }
+    }
+    _updateProgressBar();
+  }
+  _destroyProgressBar();
+}
+
+###############################################################################
+#
+# Configure Mode
+#
+###############################################################################
+sub doConfigure() {
+  # Get configuration file name
+  my $file = _getConfigFile();
+  XMLTV::Config_file::check_no_overwrite($file);
+
+  # Open configuration file. Assume UTF-8 encoding
+  open(my $fh, ">:utf8", $file)
+      or die "$0: can't open configuration file '$file': $!";
+  print $fh "# -*- coding: utf-8 -*-\n";
+
+  # Get channels
+  my %channels;
+  _getChannels(sub {
+		 # We only need name and ID
+		 my(undef, $id, $name) = @_;
+		 $channels{$id} = $name;
+	       },
+	       undef);
+
+  # Query user
+  my @sorted  = sort keys %channels;
+  my @answers = XMLTV::Ask::ask_many_boolean(1, map { "add channel $channels{$_} ($_)?" } @sorted);
+
+  # Generate configuration file contents from answers
+  foreach my $id (@sorted) {
+    warn("\nunexpected end of input reached\n"), last
+      unless @answers;
+
+    # Write selection to configuration file
+    my $answer = shift(@answers);
+    print $fh ($answer ? "" : "#"), "channel $id $channels{$id}\n";
+  }
+
+  # Check for write errors
+  close($fh)
+    or die "$0: can't write to configuration file '$file': $!";
+  message("DONE");
+}
+
+###############################################################################
+#
+# List Channels Mode
+#
+###############################################################################
+sub doListChannels() {
+  # Create XMLTV writer
+  my $writer = _createXMLTVWriter();
+
+  # Get channels
+  _getChannels(sub {
+		 my($writer, $id, $name, $language) = @_;
+		 _addChannel($writer, $id, $name, $language);
+		 },
+	       $writer);
+
+  # Done writing
+  _closeXMLTVWriter($writer);
+}
+
+###############################################################################
+#
+# Grab Mode
+#
+###############################################################################
+sub doGrab() {
+  # Sanity check
+  die "$0: --offset must be a non-negative integer"
+    unless $Option{offset} >= 0;
+  die "$0: --days must be an integer larger than 0"
+    unless $Option{days} > 0;
+
+  # Get configuation
+  my %channels;
+  {
+    # Get configuration file name
+    my $file = _getConfigFile();
+
+    # Open configuration file. Assume UTF-8 encoding
+    open(my $fh, "<:utf8", $file)
+      or die "$0: can't open configuration file '$file': $!";
+
+    # Process configuration information
+    while (<$fh>) {
+
+      # Comment removal, white space trimming and compressing
+      s/\#.*//;
+      s/^\s+//;
+      s/\s+$//;
+      next unless length;	# skip empty lines
+      s/\s+/ /;
+
+      # Channel definition
+      if (my($id, $name) = /^channel (\S+) (.+)/) {
+	debug(1, "duplicate channel definion in line $.:$id ($name)")
+	  if exists $channels{$id};
+	$channels{$id} = $name;
+
+      # Programme definition
+      } elsif (fi::programme->parseConfigLine($_)) {
+	# Nothing to be done here
+
+      } else {
+	warn("bad configuration line in file '$file', line $.: $_\n");
+      }
+    }
+
+    close($fh);
+  }
+
+  # Generate list of days
+  my $dates = fi::day->generate($Option{offset}, $Option{days});
+
+  # Set up time zone
+  setTimeZone();
+
+  # Create XMLTV writer
+  my $writer = _createXMLTVWriter();
+
+  # For each channel and each day
+  my %seen;
+  my @programmes;
+  _createProgressBar("getting listings", keys(%channels) * (@{ $dates } - 2));
+  foreach my $id (sort keys %channels) {
+    debug(1, "XMLTV channel ID: $id");
+    for (my $i = 1; $i < $#{ $dates }; $i++) {
+      debug(1, "Fetching day $dates->[$i]");
+      foreach my $source (@sources) {
+	if (my $programmes = $source->grab($id,
+					   @{ $dates }[$i - 1..$i + 1],
+					   $Option{offset} + $i - 1)) {
+
+	  if (@{ $programmes }) {
+	    # Add channel ID & name (once)
+	    _addChannel($writer, $id, $channels{$id},
+			$programmes->[0]->language())
+	      unless $seen{$id}++;
+
+	    # Add programmes to list
+	    push(@programmes, @{ $programmes });
+	  }
+	}
+      }
+      _updateProgressBar();
+    }
+  }
+  _destroyProgressBar();
+
+  # Dump programs
+  message("writing XMLTV programme data");
+  $_->dump($writer) foreach (@programmes);
+
+  # Done writing
+  _closeXMLTVWriter($writer);
+}
+
+###############################################################################
+#
+# Man page
+#
+###############################################################################
+__END__
+=pod
+
+=head1 NAME
+
+tv_grab_fi - Grab TV listings for Finland
+
+=head1 SYNOPSIS
+
+tv_grab_fi [--cache E<lt>FILEE<gt>]
+           [--config-file E<lt>FILEE<gt>]
+           [--days E<lt>NE<gt>]
+           [--gui [E<lt>OPTIONE<gt>]]
+           [--offset E<lt>NE<gt>]
+           [--output E<lt>FILEE<gt>]
+           [--quiet]
+
+tv_grab_fi  --capabilities
+
+tv_grab_fi  --configure
+           [--cache E<lt>FILEE<gt>]
+           [--config-file E<lt>FILEE<gt>]
+           [--gui [E<lt>OPTIONE<gt>]]
+           [--quiet]
+
+tv_grab_fi  --description
+
+tv_grab_fi  --help|-h|-?
+
+tv_grab_fi  --list-channels
+           [--cache E<lt>FILEE<gt>]
+           [--gui [E<lt>OPTIONE<gt>]]
+           [--quiet]
+
+tv_grab_fi  --version
+
+=head1 DESCRIPTION
+
+Grab TV listings for several channels available in Finland. The data comes
+from various sources, e.g. www.telkku.com. The grabber relies on parsing HTML,
+so it might stop working when the web page layout is changed.
+
+You need to run C<tv_grab_fi --configure> first to create the channel
+configuration for your setup. Subsequently runs of C<tv_grab_fi> will grab
+the latest data, process them and produce XML data on the standard output.
+
+=head1 COMMANDS
+
+=over 8
+
+=item B<NONE>
+
+Grab mode.
+
+=item B<--capabilities>
+
+Show the capabilities this grabber supports. See also
+L<http://wiki.xmltv.org/index.php/XmltvCapabilities>.
+
+=item B<--configure>
+
+Generate the configuration file by asking the users which channels to grab.
+
+=item B<--description>
+
+Print the description for this grabber.
+
+=item B<--help|-h|-?>
+
+Show this help page.
+
+=item B<--list-channels>
+
+Fetch all available channels from the various sources and write them to the
+standard output.
+
+=item B<--version>
+
+Show the version of this grabber.
+
+=back
+
+=head1 GENERIC OPTIONS
+
+=over 8
+
+=item B<--cache F<FILE>>
+
+File name to cache the fetched HTML data in. This speeds up subsequent runs
+using the same data.
+
+=item B<--gui [OPTION]>
+
+Enable the graphical user interface. If you don't specify B<OPTION> then
+XMLTV will automatically choose the best available GUI. Allowed values are:
+
+=over 4
+
+=item B<Term>
+
+Terminal output with a progress bar
+
+=item B<TermNoProgressBar>
+
+Terminal output without progress bar
+
+=item B<Tk>
+
+Tk-based GUI
+
+=back
+
+=item B<--quiet>
+
+Suppress any progress messages to the standard output.
+
+=back
+
+=head1 CONFIGURE MODE OPTIONS
+
+=over 8
+
+=item B<--config-file F<FILE>>
+
+File name to write the configuration to.
+
+Default is F<$HOME/.xmltv/tv_grab_fi.conf>.
+
+=back
+
+=head1 GRAB MODE OPTIONS
+
+=over 8
+
+=item B<--config-file F<FILE>>
+
+File name to read the configuration from.
+
+Default is F<$HOME/.xmltv/tv_grab_fi.conf>.
+
+=item B<--days C<N>>
+
+Grab C<N> days of TV data.
+
+Default is 14 days.
+
+=item B<--offset C<N>>
+
+Grab TV data starting at C<N> days in the future.
+
+Default is 0, i.e. today.
+
+=item B<--output F<FILE>>
+
+Write the XML data to F<FILE> instead of the standard output.
+
+=back
+
+=head1 CONFIGURATION FILE SYNTAX
+
+The configuration file is line oriented, each line can contain one command.
+Empty lines and everything after the C<#> comment character is ignored.
+Supported commands are:
+
+=over 8
+
+=item B<channel ID NAME>
+
+Grab information for this channel. C<ID> depends on the source, C<NAME> is
+ignored and forwarded as is to the XMLTV output file. This information can be
+automatically generated using the grabber in the configuration mode.
+
+=item B<series description NAME>
+
+If a programme title matches C<NAME> then the first sentence of the
+description, i.e. everything up to the first period (C<.>), question mark
+(C<?>) or exclamation mark (C<!>), is removed from the description and is used
+as the name of the episode.
+
+=item B<series title NAME>
+
+If a programme title contains a colon (C<:>) then the grabber checks if the
+left-hand side of the colon matches C<NAME>. If it does then the left-hand
+side is used as programme title and the right-hand side as the name of the
+episode.
+
+=item B<title map "FROM" 'TO'>
+
+If the programme title starts with the string C<FROM> then replace this part
+with the string C<TO>. The strings must be enclosed in single quotes (C<'>) or
+double quotes (C<">). The title mapping occurs before the C<series> command
+processing.
+
+=back
+
+=head1 SEE ALSO
+
+L<xmltv>.
+
+=head1 AUTHORS
+
+=head2 Current
+
+=over
+
+=item Stefan Becker C<stefan dot becker at nokia dot com>
+
+=item Ville Ahonen C<ville dot ahonen at iki dot fi>
+
+=back
+
+=head2 Retired
+
+=over
+
+=item Matti Airas
+
+=back
+
+=head1 BUGS
+
+The channels are identified by channel number rather than the RFC2838 form
+recommended by the XMLTV DTD.
+
+=cut

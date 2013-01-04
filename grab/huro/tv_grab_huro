@@ -1,0 +1,1809 @@
+#!/usr/bin/perl -w
+# vi:noet:ts=4
+
+#-------------------------------------------------------------------------------
+# $Id: tv_grab_huro.in,v 1.47 2011/07/28 09:01:54 attila_nagy Exp $
+#-------------------------------------------------------------------------------
+
+#-------------------------------------------------------------------------------
+# documentation
+#-------------------------------------------------------------------------------
+
+=pod
+
+=head1 NAME
+
+tv_grab_huro - Grab TV listings for Hungary or Romania.
+
+=head1 SYNOPSIS
+
+tv_grab_huro --help
+
+tv_grab_huro [--config-file FILE] --configure [--gui GUITYPE]
+
+tv_grab_huro [--config-file FILE] [--output FILE] [--days N] [--offset N]
+			[--slow] [--get-full-description] [--max-desc-length LENGTH]
+			[--icons | (--local-icons DIRECTORY [--no-fetch-icons])]
+			[--gui GUITYPE] [--quiet]
+
+tv_grab_huro --list-channels --loc [hu | ro] 
+			[--icons | (--local-icons DIRECTORY [--no-fetch-icons])]
+
+tv_grab_huro --capabilities
+
+tv_grab_huro --version
+
+=head1 DESCRIPTION
+
+Output TV listings for several channels available in Hungary or
+Romania. The grabber relies on parsing HTML so it might stop working
+at any time.
+
+First run B<tv_grab_huro --configure> to choose, which channels you want
+to download. Then running B<tv_grab_huro> with no arguments will output
+listings in XML format to standard output.
+
+B<--configure> Prompt for which channels,
+and write the configuration file.
+
+B<--config-file FILE> Set the name of the configuration file, the
+default is B<~/.xmltv/tv_grab_huro.conf>. This is the file written by
+B<--configure> and read when grabbing.
+
+B<--gui GUITYPE> Use this option to enable a graphical interface to be used.
+OPTION may be 'Tk', or left blank for the best available choice.
+Additional allowed values of OPTION are 'Term' for normal terminal output
+(default) and 'TermNoProgressBar' to disable the use of Term::ProgressBar.
+
+B<--output FILE> Write to FILE rather than standard output.
+
+B<--days N> Grab N days. The default is eight.
+
+B<--offset N> Start N days in the future. The default is to start
+from today.
+
+B<--quiet> Suppress the progress messages normally written to standard
+error.
+
+B<--slow> Enables long strategy run: port.hu publishes only some (vital)
+information on the actual listing pages, the rest is shown in a separate
+popup window. If you'd like to parse the data from these popups as well,
+supply this flag. But consider that the grab process takes much longer when
+doing so, since many more web pages have to be retrieved.
+
+B<--get-full-description> This is quite like B<--slow> but doesn't always download
+data from popup window. Instead this is only requested if description in
+overview is truncated.
+
+B<--list-channels> Write output giving <channel> elements for every
+channel available (ignoring the config file), but no programmes.
+
+B<--capabilities> Show which capabilities the grabber supports. For more
+information, see L<http://wiki.xmltv.org/index.php/XmltvCapabilities>
+
+B<--version> Show the version of the grabber.
+
+B<--icons> and B<--local-icons DIRECTORY> get the URL for
+channel-logos together with the channel-list. With B<--icons>
+specified the logos(images) will be not fetched just their URL (http://...)
+will be written in the output XML. If called with B<--local-icons>,
+the generated URL (file://...) will point to the the local directory
+DIRECTORY and all channel logos will be grabbed and saved under this place.
+Use B<--no-fetch-icons> option to disable the icon fetching.
+Note: icon fetching currently works for Hungary and Romania only.
+
+B<--max-desc-length LENGTH> can be used to maximize the lenght of
+the grabbed program long description. This can be usefull if you have
+a viewer program (using this xmltv output), which can not be display
+userfriendly the description if it is more then LENGTH character.
+
+B<--help> Print a help message and exit.
+
+=head1 SEE ALSO
+
+L<xmltv(5)>.
+
+=head1 AUTHOR
+
+Attila Szekeres and Zsolt Varga. Based on tv_grab_fi by Matti Airas.
+Heavily patched and earlier maintained by Stefan siegl <stesie@brokenpipe.de>,
+reworked and now maintained by Balazs Molnar <mbdev@freemail.hu>.
+
+=head1 BUGS
+
+The data source does not include full channels information and the
+channels are identified by short names rather than the RFC2838 form
+recommended by the XMLTV DTD.
+
+=cut
+
+#-------------------------------------------------------------------------------
+# initializations
+#-------------------------------------------------------------------------------
+
+use strict;
+use XMLTV::Version '$Id: tv_grab_huro.in,v 1.47 2011/07/28 09:01:54 attila_nagy Exp $';
+use XMLTV::Capabilities qw/baseline manualconfig cache/;
+use XMLTV::Description 'Hungary/Romania';
+use XMLTV::Supplement qw/GetSupplement/;
+use Getopt::Long;
+use Date::Manip;
+use Cwd;
+use HTML::TreeBuilder;
+use HTML::Entities; # parse entities
+use IO::File;
+use File::Basename;
+
+use XMLTV;
+use XMLTV::Memoize;
+use XMLTV::ProgressBar;
+use XMLTV::Ask;
+use XMLTV::DST;
+use XMLTV::Get_nice;
+use XMLTV::Mode;
+use XMLTV::Config_file;
+use XMLTV::Date;
+use XMLTV::Gunzip;
+
+# Todo: perhaps we should internationalize messages and docs?
+use XMLTV::Usage <<"END"
+$0: get Hungarian or Romanian television listings in XMLTV format
+To configure:
+$0 --configure [--config-file FILE] [--gui GUITYPE]
+To grab listings:
+$0 [--config-file FILE] [--output FILE] [--days N] [--offset N]
+	[--slow] [--get-full-description] [--max-desc-length LENGTH]
+	[--icons | (--local-icons DIRECTORY [--no-fetch-icons])]
+	[--gui GUITYPE] [--quiet]
+To list channels:
+$0 --list-channels --loc [hu | ro]
+	[--icons | (--local-icons DIRECTORY [--no-fetch-icons])]
+To show capabilities: $0 --capabilities
+To show version: $0 --version
+END
+	;
+
+# ${Log::TraceMessages::On} = 1;
+# to switch TRACE in remove the comment from prev. line
+
+# Use Log::TraceMessages if installed.
+BEGIN {
+	eval { require Log::TraceMessages };
+	if ($@) {
+		*t = sub {};
+		*d = sub { '' };
+	}
+	else {
+		*t = \&Log::TraceMessages::t;
+		*d = \&Log::TraceMessages::d;
+		Log::TraceMessages::check_argv();
+	}
+}
+
+
+my ($opt_days, $opt_offset, $opt_help, $opt_output,
+	$opt_configure, $opt_config_file, $opt_gui, $opt_quiet,
+	$opt_list_channels, $opt_loc, $opt_slow, $opt_full_desc,
+	$opt_local_icons, $opt_icons, $opt_no_fetch_icons,
+	$opt_max_desc_length, $opt_worker_times, $opt_now);
+
+our $FETCHOFFSET = 0;
+our ($DAYSPERPAGE, $TZ, $COUNTRY, $CONFIG_FILE, $WNAME, $WSTIME);
+our (%CATMAP, %JOBMAP, %CHANNELS, %WTIMES);
+our %COUNTRIES = (Hungary => [ 'hu', '+0100' ], 
+                  Czech   => [ 'cz', '+0100' ], 
+                  Romania => [ 'ro', '+0200' ], 
+                 Slovakia => [ 'sk', '+0100' ]);
+our %WORDS = (
+		cz => { episode => "Epizoda"},
+		hu => {	episode => "rész",
+				minute =>  "perc",
+				links => "linkek" },
+		ro => { episode =>  "no such info on webpage",
+				minute => "minute",
+				links => "Linkuri" },
+		sk => { episode => "Epizóda"}
+	) ;
+
+sub domain();
+sub xid( $ );
+sub xhead();
+sub process_table( $$$$ );
+sub parse_short_desc ( $ );
+sub get_channels();
+sub get_infourl_data( $$ );
+sub add_person ( $$$ );
+sub grab_icon( $ );
+sub get_channel_urls( $ );
+sub worker( $ );
+sub showworkers();
+sub get_all_text ( $ );
+
+# Get options, including undocumented --cache option.
+XMLTV::Memoize::check_argv('XMLTV::Get_nice::get_nice_aux');
+
+
+#-------------------------------------------------------------------------------
+# domain
+#-------------------------------------------------------------------------------
+# desc		: construct the www host's hostname's domain part
+# arguments	: none
+# returns	: "port.hu", "port.ro" based on country id
+#-------------------------------------------------------------------------------
+sub domain() {
+	"port.$COUNTRY"
+};
+
+
+#-------------------------------------------------------------------------------
+# xid
+#-------------------------------------------------------------------------------
+# desc		: turn a site channel id into an XMLTV id
+# arguments	: 1- port site channel id: 005 (f.e)
+# returns	: port.hu, port.ro based on country id
+#-------------------------------------------------------------------------------
+sub xid( $ ) {
+	my $id = shift;
+	return "$id." . domain();
+}
+
+
+#-------------------------------------------------------------------------------
+# xhead
+#-------------------------------------------------------------------------------
+# desc		: provide the head of the XML output
+# arguments	: none
+# returns	: hash, containing the info's XML tags
+#-------------------------------------------------------------------------------
+sub xhead() {
+	my $d = &domain;
+	return { 'source-info-url'		 => "http://www.$d/",
+			'source-data-url'		 => "http://www.$d/tv/",
+			'generator-info-name' => 'XMLTV',
+			'generator-info-url'	=> 'http://xmltv.org/',
+	};
+}
+
+		# function to parse all of text data of a HTML element and his childs:
+#-------------------------------------------------------------------------------
+# get_all_text
+#-------------------------------------------------------------------------------
+# desc		: parse all of text data of a HTML element and in his childs
+# arguments	: 1- HTML:Element object from here will be started the downhill
+# returns	: @arrays of founded text elements
+#-------------------------------------------------------------------------------
+sub get_all_text( $ ) {
+	my @tmplines;
+	my $e = $_[0];
+	if (ref $e) {
+		foreach my $c ($e->content_list) {
+			push @tmplines, get_all_text($c);
+		}
+	}
+	else {
+		push @tmplines, $e;
+	}
+	return @tmplines;
+}
+
+#------------------------------------------------------------------------------
+# process_table
+#------------------------------------------------------------------------------
+# desc		: fetch a URL and process it
+# arguments	: 1- Date::Manip object, basedate/startdate of grabbing (e.g. 20060205)
+# 			  2- xmltv id of channel
+# 			  3- site id of channel
+# 			  4- dayindex of the requested page on port.hu|ro 
+# returns	: list of the programme hashes to write
+#------------------------------------------------------------------------------
+sub process_table( $$$$ ) {
+	my ($basedate, $ch_xmltv_id, $ch_port_id, $baseday) = @_;
+	
+	$basedate = UnixDate(DateCalc(parse_date($basedate),"- 1 day"), '%Q');
+	
+	my $days_to_request = $DAYSPERPAGE+1;
+	# We have to request at minimum of four days
+	$days_to_request = 4 if ($days_to_request<4);
+	
+	my $basedateday = UnixDate(parse_date($basedate), '%e');
+	my $urlfmt = "http://www." . domain() .
+		"/pls/tv/tv.channel?i_ch=$ch_port_id" .
+		"&i_date=%d&i_xday=".$days_to_request."&i_where=1";
+	my $url = "$urlfmt";
+	my $currday = $baseday + $FETCHOFFSET - 1;
+	my ($tree, $body);
+
+
+	local $SIG{__WARN__} = sub {
+		warn "$url: $_[0]";
+	};
+
+	# make (maximum) two loop to fetch program data:
+	#
+	# if the grabber runs in eraly hours (e.g. 01:00, 02:00) port.hu returns
+	# the yesterdays's program as today's program... so we have to check it,
+	# example.hu: <span class="ctxt">Péntek (február 27.)</span>
+	# example.ro: <span class="ctxt">Duminic\u0103 (26 februarie)</span>
+	# if this failes, we construct the previous (or next?) day's url 
+
+	foreach (1, 2) {
+		$url = sprintf($urlfmt, $basedate);
+
+		t "fetching url: $url";
+		worker("base-downloading");
+		$XMLTV::Get_nice::FailOnError = 1;
+		my $data=get_nice($url);
+		# FIXME strip sponsored links, they don't work in xmltv anyway
+		$data =~ s|\x0D||g; # strip carriage return
+		$data =~ s|<span class=\"spons_link.*?</span>||g;
+		$data =~ s|<div style=\"display:none\">.*?</div>||g;
+		# strip links to divido.hu
+		$data =~ s|<a onclick=\"loggin.*?</a>||g;
+
+		$tree = HTML::TreeBuilder->new_from_content($data) or 
+			die "could not fetch/parse $url (progamtable)\n";
+		worker("base-parsing");
+
+		$body = $tree->look_down("_tag"=>"body");
+
+		my @daysonpage = () ;
+		foreach ($body->look_down("_tag"=>"p", "class" => "date_box")) {
+			$_ = $_->as_text();
+			if ((($COUNTRY eq 'hu') && (m/^\s*\S+\s+\(\s*\S+\s+(\d+)\.\s*\)\s*$/))
+				||
+				(($COUNTRY eq 'ro') && (m/^\s*\S+\s+\(\s*(\d+)\s+\S+\s*\)\s*$/))
+				||
+				(($COUNTRY eq 'sk' || $COUNTRY eq 'cz') && (m/^\s*\S+\s+\(\s*(\d+)\.\s+\S+\s*\)\s*$/)))
+			{
+				t "added founded date of the month on the grabbed page: $1";
+				push @daysonpage, $1;
+			}
+		} 
+		if (@daysonpage) {
+			# check date ... is the first founded date on the page the requested?
+
+			last if ($basedateday == $daysonpage[0]);
+
+			$body = undef;
+			$tree->delete();
+
+			t "requested from $basedate, but port.$COUNTRY returned programs from wrong day: $daysonpage[0]";
+			if (UnixDate(DateCalc($basedate, "- 1 days"), '%e') == $daysonpage[0]) {
+				# port.hu returned the programms from yesterday
+				$FETCHOFFSET += 1 ;
+			}
+			elsif (UnixDate(DateCalc($basedate, "+ 1 days"), '%e') == $daysonpage[0]) {
+				# port.hu returned the programms from tommorrow
+				$FETCHOFFSET -= -1 ;
+			}
+			else {
+				t "fetched HTML page do not contain 0, +1 or -1 day of the reuested one";
+				last;
+			}
+			t "global fetch offset was set to: $FETCHOFFSET";
+		}
+		else {
+			warn "no date data found on the fetched HTML page, trying to continue";
+			last;
+		}
+	}
+
+	if (! defined($body)) {
+		warn "Could not found the requested day's data on the grabbed HTML page, " .
+			"some programs on $ch_xmltv_id channel will be not fetched.";
+		return;
+	}
+
+	# the page consists of two major tables, where one holds the data 
+	# until 'bout 20 o'clock, the other, i.e. lower, one the evening program
+	# the programs are in <tr> statements in more tables, this tables are
+	# intermited with other tables, which contain images
+	# - we need only the rows, which hold program data; because tables are
+	#   structured into other tables, we need only the most inner row
+	#   -> if it contains program data, and 
+	#   -> has no child-tables in it
+	# - there are tables, which will be the lower region delimiter
+	#   this is most inner and contains the vonal.gif, we will add this row
+	#   only as "lower region" string
+
+	my @rows;
+	my $empty_first_column;
+	foreach ($body->look_down("_tag"=>"tr")) {
+
+		if ($_->look_down("_tag"=>"img", "src" => "/tv/kep/vonal.gif")) {
+			# ther is the "vonal.gif" in the table?
+			t "+ most inner row containing vonal.gif found";
+			push @rows, "lower region";
+		}
+	
+		# look for line.gif as separator as well, per zolih@hotmail.com
+		elsif ($_->look_down("_tag"=>"img", "src" => qr/\/line.gif$/)) {
+			# ther is the "vonal.gif" in the table?
+			t "+ most inner row containing vonal.gif found";
+			
+			# in some cases the lower part of the first column is empty (See ticket #2890433)
+			# We're trying to identify this case
+			if (! scalar $_->look_down("_tag"=>"table")->look_down("_tag"=>"td", class=>"time_container")) {
+				t "first column is empty";
+				$empty_first_column = 1;
+			}
+			push @rows, "lower region";
+		}
+		# have childrens? if yes, skip this row
+		next if ($_->look_down("_tag"=>"table"));
+		
+		# actual show is duplicated sometimes, and one of them is hidden
+		next if ($_->parent()->attr("class") && $_->parent()->attr("class") eq "actual_showtime_hide");
+		
+		if ($_->as_text() =~ /[012]?[0-9]:[0-5][0-9]/ || ($_->attr("class") && $_->attr("class") =~ /^event_/)) {
+			t "+ most inner row containing programs found:";
+			t $_->as_text();
+			push @rows, $_;
+		}
+	}
+
+	# walk through the rows to create programs
+	# if you grab channel programs for 3 days in one fetch, you will have
+	# the order of the rows is, how thay appear in the output, so the
+	# 1-day, 2-day, 3-day, 1-night, 2-night-part1, 2-night-part2, 3-night
+
+	my @programs;
+	my $region = "upper";
+	my $startdate = $basedate;
+	my $lasttime = 0;
+	my $lasttimeHHMM = "";
+
+	# we need all the rows, because this is a program record:
+	foreach my $row (@rows) {
+
+		# check whether if we are first in lower tables ... -> reset date
+		if (! ref($row) && $row eq "lower region") {
+			if ($region eq "upper" && @programs) {
+				t "upper/lower delimiter found, setting date back to startdate ($basedate)";
+				$startdate = $basedate;
+				$lasttime = 12 * 60; # bottom row start after 18 o'clock, this gives us some safety, if the current show indicator is around
+				$currday = $baseday + $FETCHOFFSET - 1;
+				$region = "lower";
+				
+				# in some cases the lower part of the first column is empty (See ticket #2890433)
+				# In this case we have to skip the first day
+				if ($empty_first_column) {
+					t "first column is empty, bumped to next day";
+					$currday++;
+					$startdate = UnixDate(DateCalc(parse_date($startdate), "+ 1 day"), '%Q');
+				}
+			}
+			next;
+		}
+
+		my (@urls, %program);
+		
+		foreach my $col ($row->look_down("_tag"=>"td")) {
+			# the column can hold following type of data:
+			# begin time | title | long desc | url | category
+			
+			if ($col->attr("colspan") && (my $begin_time = $col->look_down("_tag"=>"p", "class"=>"begin_time" ))) 
+			{
+				$_ = $begin_time->as_text();
+			} else {
+				$_ = $col->as_text();
+			}
+			s/^\s+//;s/\s+$//;
+
+			# port.hu makes sometimes empty td elements
+			next if (! length);
+
+			t "col contents as text:" . d $_;
+
+			if (m/^([012]?[0-9]):([0-5][0-9])$/) {
+				s/^Kb[.]//; # means 'approx' in Magyar
+				s/^24:/00:/;
+
+				my $time = $1 * 60 + $2;
+				if ($time < $lasttime) {
+					t "bumped to the the next day";
+					$currday++;
+					$startdate = UnixDate(DateCalc(parse_date($startdate), 
+													"+ 1 day"), '%Q');
+					die if not defined $startdate;
+				}
+				$lasttime = $time;
+				# Fix the time format to be suitable for sorting
+				$program{time} = length($_) == 4 ? "0".$_ : $_ ;
+				$program{startdate} = $startdate ;
+				$lasttimeHHMM = $program{time};
+			}
+			else {
+				my @span;
+				if (@span = $col->look_down("class"=>"btxt")) {
+					$program{title} = $span[0]->as_text();
+				}
+				elsif (@span = $col->look_down("class"=>"lbbtxt")) {
+					$program{title} = $span[0]->as_text();
+				}
+				else {
+					warn "cannot found title: $startdate" ;
+				}
+				# add one space after the title, if there is none
+				my @tmp = get_all_text($col);
+				$_ = join(' ', @tmp);
+				s/  +/ /g;
+				s/[^\w]*putbox\(\"[0-9][0-9]\"\)[\s\n\r]*//g;
+				s/Megvásárolható (DVD[ ]?-n|VHS[ ]?-en)//g;
+                                # strip leading &nbsp (and other spaces)
+				s/^[ \t\xA0]*//g;
+                                # turn left over &nbsp into normal ones
+                                # (also take care of tabs and multiple spaces while here)
+				s/[ \t\xA0]+/ /g;
+				$program{desc} = $_ if length($_);
+				$program{day} = $currday;
+				foreach my $a ($col->look_down("_tag"=>"a")) {
+					push @urls,	$a->attr(q(href));
+				}
+			}
+		} # foreach $col
+
+		# New type of row: contains only the time of the event
+		# but not the actual program data. So in this case we try to
+		# jump to the next row
+		if (! $row->attr("class") || (not $row->attr("class") =~ /[\s]*event_/ )) {
+			t "found line without event, the time is: $lasttimeHHMM";
+		 	next;
+		}
+		
+		if (! $program{time} && $lasttimeHHMM) {
+			# Fix the time format to be suitable for sorting
+			$program{time} = $lasttimeHHMM;
+			$program{startdate} = $startdate ;
+		}
+
+		# add all parsed info, as program{time, title, desc, category, date}
+
+		$program{infourl} = \@urls if (@urls);
+
+		parse_short_desc(\%program);
+		t "pushing ".$program{title};
+
+		push @programs, \%program if (defined $program{time}) && (defined $program{title});
+
+	} # foreach $row
+
+
+	$tree->delete; # get rid of HTML::TreeBuilder's in memory representation
+
+	if (not @programs) {
+		warn "no programs found, skipping\n";
+		return ();
+	}
+
+	# make a sort on programs, short compare function: cmp startdate, time
+	# stringwise (this gives the same rsult as comapre datewise)
+	# Date_Cmp(UnixDate($left->{time},'%H:%M'),UnixDate($right->{time},'%H:%M');
+
+	sub bytime { 
+		($a->{startdate}.$a->{time}) cmp ($b->{startdate}.$b->{time});
+	}
+	@programs = sort bytime @programs;
+
+	t "programs in sorted order:";
+	t "program:" . d $_ foreach (@programs);
+
+	my (@r, $prev);
+	# assume lang == country
+	my $lang = $COUNTRY;
+
+	foreach my $program (@programs) {
+		my $prog;
+		
+		$prog->{channel}=$ch_xmltv_id;
+
+		$prog->{title}=[ [ $program->{title}, $lang ] ];
+
+		my $start=parse_local_date("$program->{startdate} $program->{time}", $TZ);
+		my ($start_base, $start_tz) = @{date_to_local($start, $TZ)};
+		$prog->{start}=UnixDate($start_base, '%q') . " $start_tz";
+
+		$prog->{desc} = [[ $program->{desc}, $lang ]] 
+			if defined $program->{desc};
+		$prog->{category} = $program->{category} 
+			if (defined $program->{category});
+		$prog->{date} = $program->{date} 
+			if defined $program->{date};
+		$prog->{qw(episode-num)} = $program->{qw(episode-num)} 
+			if defined $program->{qw(episode-num)};
+		$prog->{length} = $program->{length} 
+			if defined $program->{length};
+
+		# Setting stop date for the previous programm
+		# Last program in the grabbed list has no stop attribute, sorry.
+		# Port.hu uses a virtual program as the last programme
+		# anyway
+		if ((defined($prev)) && $prev->{start} ne $prog->{start}) {
+			$prev->{stop} = $prog->{start};
+		}
+		
+		# We skip those programs, that are out of the requested time frame
+		if ($program->{day} > $opt_days+$opt_offset || $program->{day}<1+$opt_offset) {
+			$prev = undef;
+			next;
+		}
+		
+		worker("slow-parsing");	
+		foreach my $infourl (@{$program->{infourl}}) {
+			# always read data from linked page (in --slow mode)
+			# in --get-full-description mode read if description ends in '...'
+			if ( ($opt_slow) ||
+					($opt_full_desc && (defined $prog->{desc}) && 
+					($prog->{desc})->[0]->[0] =~ m/\.\.\.$/) ) {
+				get_infourl_data($prog, $infourl);
+			}
+		}
+		worker("base-parsing");
+		
+		push @r, $prog;
+
+		if ((defined($prev)) && $prev->{start} eq $prog->{start}) {
+			# starttime of previous and current programme is equal,
+			# therefore use clumpidx to express relation
+			my $clumps_num = 2;
+
+			if (defined($r[-2]->{q(clumpidx)})) {
+				# previous programme already has a clumpidx arg assigned.
+				($clumps_num) = $r[-2]->{q(clumpidx)} =~ m|^\d+/(\d+)$|;
+			}
+
+			# okay, assign new clumpidx values ...
+			for (0 .. ($clumps_num-1)) {
+				$r[-$clumps_num+$_]->{q(clumpidx)} = "$_/$clumps_num";
+			}
+		}
+
+		$prev = $prog;
+	}
+	return @r;
+}
+
+
+#-------------------------------------------------------------------------------
+# parse_short_desc
+#-------------------------------------------------------------------------------
+# desc		: parse the short description of a program, founded on the program
+# 			  listing page (this is mostly 1-2 lines ~ 120 characters), but
+# 			  sometimes contains categrory, date, length
+# arguments	: 1- reference to a program HASH, there is the grabbed description in it
+# 			     and there should be attached the other newly found informations,
+# 			     such as:
+#			     ( category => [ [Animals, en], [Természet, hu], [..], ... ]
+#				   date  => 2001 )
+# returns	: none
+#-------------------------------------------------------------------------------
+sub parse_short_desc ($) {
+	my $prog = shift;
+	my (%result, $desc, $cont, $episode, $minutes, $year, @categories);
+
+	if ((defined $prog->{desc}) && length($prog->{desc})) {
+		$desc = $prog->{desc};
+	}
+	else {
+		return
+	}
+
+
+	# 1: if there is () in the desc grab from there
+	# 2: if no () found, try in the first 120 character
+	#
+	# examples:
+	# Hegylako - A hollo	(amerikai-francia-kanadai kalandfilmsorozat, 1998)
+	# Lisa.	Animációs sorozat.
+	# Slayers - A kis boszorkány.	(12).	Japan animacios sorozat.
+	#  
+	# sometimes only the proposed minimal age of watching person is
+	# presented in parentheses eg: (12), so parse this only if it is 
+	# longer as for example 6 (4 is not enough, because (ism.) is no category...)
+
+	if (! (($cont) = $desc =~ m/[^\(]*\(([^\)]{6,})\)/)) {
+		$cont = substr($desc, 0, (length($desc) < 120 ? length($desc) : 120));
+	}
+
+	t "parse_short_desc: text: '$cont'";
+        $WORDS{$COUNTRY}->{episode}="zdontmatchz" unless exists $WORDS{$COUNTRY}->{episode};
+	# port.hu episode style
+	if (m/\s*([0-9\/]+)\. $WORDS{$COUNTRY}->{episode}/) { $episode = $1; }
+	# port.cz/.sk episode style with season
+	elsif (m/$WORDS{$COUNTRY}->{episode} \s*([0-9]+, [IVX]+\.)/) { $episode = $1; }
+	# port.cz/.sk episode style for two episodes back to back in one slot
+	elsif (m/$WORDS{$COUNTRY}->{episode} \s*(\d+, \d+)/) { $episode = $1; }
+	# port.cz/.sk episode style without season
+	elsif (m/$WORDS{$COUNTRY}->{episode} \s*([0-9\/]+)/) { $episode = $1; }
+	if (m/\s*(\d+)'/)           { $minutes = $1; }
+	if (m/\s*([12][0-9]{3})/)    { $year = $1 }
+
+	t "found episode: '$episode'" if defined $episode;
+	t "found minutes: '$minutes'" if defined $minutes;
+	t "found year: '$year'"		  if defined $year;
+
+	foreach (keys %CATMAP) {
+		if ($cont =~ /$CATMAP{$_}[0]/i) {
+			push @categories, [$_, "en"];
+			push @categories, [$CATMAP{$_}[1], $COUNTRY];
+			t "found category: '$_'";
+		}
+	}
+
+	$prog->{q(category)} = \@categories if @categories;
+	$prog->{q(length)} = $minutes * 60 if defined $minutes;
+	$prog->{q(date)} = $year if defined $year ;
+	if (defined($episode)) {
+		if($episode =~ m#(\d+)/(\d+)#) {
+			my $current = $1;
+			my $total = $2;
+			# swap numbers for port.hu, they have total/current
+			if ($current > $total) {
+				($total, $current) = ($current, $total);
+			}
+			# episode-num spec with the total number specified.
+			# however XMLTV counts from 0 on ...
+			$prog->{q(episode-num)} = [[ sprintf('. %d/%d .', $current - 1, $total), "xmltv_ns" ],
+				[ $episode, "onscreen" ]];
+		} elsif($episode =~ m#(\d+), ([IVX]+)#) {
+			# decode season from roman numeral
+			my $season = arabic ($2);
+			# episode-num spec with the total number specified.
+			# however XMLTV counts from 0 on ...
+			$prog->{q(episode-num)} = [[ sprintf('%d . %d .', $season - 1, $1 - 1), "xmltv_ns" ],
+				[ $episode, "onscreen" ]];
+		} elsif($episode =~ m#(\d+)#) {
+			# episode-num spec with just the episode number
+			# however XMLTV counts from 0 on ...
+			$prog->{q(episode-num)} = [[ sprintf('. %d .', $1 - 1), "xmltv_ns" ]];
+		} else {
+			$prog->{q(episode-num)} = [[ $episode, "onscreen" ]];
+		}
+	}
+}
+
+#-------------------------------------------------------------------------------
+# get_nice_gzip
+#-------------------------------------------------------------------------------
+# desc          : get url with get_nice, check for gzip encoding, return
+#                 decoded if necessary
+# arguments     : url to fetch from
+# returns       : html as scalar
+#-------------------------------------------------------------------------------
+sub get_nice_gzip( $ ) {
+    my $data = get_nice($_[0]);
+    # Use heuristics to check for valid html
+    if ($data =~ /<html|<head|<body|<table|<div/i) {
+        return $data;
+    }
+    
+    t "content is gzipped, deflating";
+    return gunzip($data);
+}
+
+
+#-------------------------------------------------------------------------------
+# get_channels
+#-------------------------------------------------------------------------------
+# desc		: get channel listing for a country
+# arguments	: none
+# returns	: sets global CHANNELS hash to the grabbed channels:
+#			  ( '$channel_id' => 
+#			  ( 'display-name' => [ [ $channel_name, $COUNTRY ] ],
+#				'id' => "$channel_id.$d",
+#				'icon' => [ { src => $iconurl } ] )
+#-------------------------------------------------------------------------------
+sub get_channels() {
+	my $d = domain();
+	my $bar = new XMLTV::ProgressBar('getting list of channels', 1)
+		if not $opt_quiet;
+	my $url="http://www.$d/pls/tv/tv.prog";
+
+	worker("base-downloading");
+	t "fetching $url...";
+	$XMLTV::Get_nice::FailOnError = 1;
+	my $data = get_nice_gzip($url);
+	my $tree = HTML::TreeBuilder->new_from_content($data) or
+		die "could not fetch/parse $url (channel listing)";
+	worker("base-parsing");
+
+	my @menus = $tree->find_by_tag_name("_tag"=>"select");
+
+	foreach my $elem (@menus) {
+		my $cname = $elem->attr('name');
+		$cname = '' if (!$cname);
+		if ($cname eq "i_ch") {
+			my @ocanals = $elem->find_by_tag_name("_tag"=>"option");
+			@ocanals = sort @ocanals;
+			foreach my $opt (@ocanals) {
+				my %channel;
+				if (not $opt->attr('value') eq "") {
+					my $channel_id = $opt->attr('value');
+					my $channel_name = $opt->as_text;
+					if (length $channel_id eq 1) {
+						$channel_id = "00" . $channel_id
+					}
+					if (length $channel_id eq 2) {
+						$channel_id = "0" . $channel_id
+					}
+					# Assume country code and lang. code the same.
+					%channel = ( 
+						'display-name' => [ [ $channel_name, $COUNTRY ] ],
+						'id' => "$channel_id.$d"
+					) ;
+					# fetch and get icon url
+					worker("base-downloading");
+					if (my $iconurl = grab_icon( $channel_id )) {
+						$channel{'icon'} = [ { src => $iconurl } ];
+					}
+					worker("base-parsing");
+					$CHANNELS{$channel_id} = \%channel;
+				} 
+			}
+		}
+	}
+	die "no CHANNELS could be found" if not %CHANNELS;
+	update $bar if not $opt_quiet;
+	$bar->finish() if not $opt_quiet;
+	t "CHANNELS:" . d \%CHANNELS;
+}
+
+
+#-------------------------------------------------------------------------------
+# add_person
+#-------------------------------------------------------------------------------
+# desc		: check and maybe add the person to the credits
+# arguments	: 1- found hungarian/roumanian jobname on the HTML page
+#			  2- name of the person
+#			  3- reference to the global creadits hash
+# returns	: none
+#-------------------------------------------------------------------------------
+sub add_person ( $$$ ) {
+	my ($job, $person, $rcredits) = @_;
+	$person =~ s/\s+/ /g;
+
+	return unless length($person);
+
+	if (defined($JOBMAP{$job})) {
+		push @{$$rcredits{$JOBMAP{$job}}}, $person;
+	}
+	else {
+		push @{$$rcredits{'actor'}}, $person;
+	}
+	t "credits: added: '$job -> $person'";
+}
+
+
+#-------------------------------------------------------------------------------
+# get_infourl_data
+#-------------------------------------------------------------------------------
+# desc		: merge data from linked info page into programme hash
+# arguments	: 1- reference to the program, whom detailed descr should be grabbed
+#			  2- url to fetch
+# returns	: none
+#-------------------------------------------------------------------------------
+sub get_infourl_data( $$ ) {
+	my $prog = shift;
+	my $d = domain();
+	my $url = shift;
+
+    # add port.hu/port.ro base url only if url is not contains the "://" uri separator
+	if (! ($url =~ "://")) {
+	  $url = "http://www.$d" . $url;
+    }
+
+    # no info, so don't add it to anywhere
+    # -> calendar.event_popup 
+    if ($url =~ "calendar\.event_popup") {
+        t "SKIP fetching of slow url: $url";
+        return;
+    }
+
+	# do not grab:
+	# -> pictures: ... pls/me/picture.popup?i_area_id
+	# -> dvd rent links page: ... pls/w/logging.page_log?i_page_id=20...
+	# -> sample movie ... video.link_popup?i_object_id=18822
+    # -> dvd sales page: www.divido.hu...
+    # -> bet on a sport event -> sprotingbet
+    # -> general advert links: adverticum
+
+    if ($url =~ "(picture.popup|logging.page_log|video.link_popup|www\.divido\.hu|sportingbet|adverticum\.net)") {
+		# add this url to the program
+		push @{$prog->{q(url)}}, $url;
+		t "SKIP fetching of slow url: $url";
+		return;
+	}
+
+	t "fetching slow url" . d $url;
+
+	worker("slow-downloading");
+	t "fetching $url...";
+	$XMLTV::Get_nice::FailOnError = 0;
+	my $data;
+	if (! defined($data = get_nice($url))) {
+		worker("slow-parsing");
+		warn "Could not get URL: $url, the detailed description for the program [" .
+			$prog->{channel} . ", " . $prog->{title}[0][0] . ", " . $prog->{start} .
+			"] will be not available. Error message: " . error_msg($url) . "." ;
+		return;
+	}
+	my $tree = HTML::TreeBuilder->new_from_content($data) or
+		die "could not fetch/parse $url (infopage)";
+	worker("slow-parsing");
+
+	my (@lines, $line, $anchor, $left, $right, $parent, $elem, $joined);
+
+	# SUBTITLE
+	# anchor point: 
+	# the title will be tagged aw follows:
+	#							<span class="blackbigtitle"> title </span>
+	# these siblings buld the subtitle, until a table follows... e.g.:
+	#	<br><span class="txt"> ... subtitle line 1 ...<br>
+	#	<span class="bsubtitle"> ...subtitle line 2 ... </span></center><p>
+	#	<table ....
+	#	we have to search the title tag and collect the text until
+	#	table found
+
+	t "subtitle parsing ...";
+	($anchor) = $tree->look_down(_tag=>"span", class=>"blackbigtitle");
+	if ($anchor) {
+		$elem = $anchor; 
+		my ($engtitle, @tmp);
+		while (($elem = $elem->right()) &&
+				((ref $elem) && ($elem->tag() ne "table"))) {
+			# if a whole line is surrounded with parentheses, on port.hu
+			# this is the program's english title, add this as title and
+			# also as subtitle: because some viewer shows only infos of
+			# selected language (so the english title will be not
+			# visible otherwise just in sub-title)
+
+			@tmp = get_all_text($elem);
+			push @lines, @tmp;
+			$line = join(' ', @tmp);
+			if (($engtitle) = $line =~ m/^\s*\(([^\)]+)\)\s*$/) {
+				push @{$prog->{q(title)}}, [$engtitle, 'en'];
+				t "engtitle added: $engtitle";
+			}
+		}
+		$joined = join(", ", @lines);
+		$joined =~ s/\xA0//;	# remove the to_text()'s results of &nbsp
+		$joined =~ s/^\s+//;	# remove blanks
+		$joined =~ s/\s+$//;	# remove blanks
+		t "anchor and right sibling found, joinedlines parsed :'$joined'";
+		$prog->{q(sub-title)} = [[$joined, $COUNTRY]] if length($joined);
+	}
+
+	# LINKS:
+	# try to grab IMDB, All Movie, official web site of the program
+	# anchor point:
+	# (the Links are listed between dots, but it is not allways the 5th)
+	# (dots block, because not all blocks presented allways, so this is not)
+	# (suggested to use) the Links are listed after the text Linkek(hu)
+	# or Linkuri(ro), some line
+	# after come a 'dots' (which is in a TABLE element, so:
+	# find a span element with Linkek(hu) or Linkuri(ro) contents, get all
+	# A element until TABLE not reached
+
+	t "links parsing ...";
+	$anchor = undef;
+	my @spans = $tree->look_down(_tag => "span");
+	t "spans found: " . $#spans;
+	foreach (@spans) { 
+		if ($_->as_text() =~ /$WORDS{$COUNTRY}->{links}/) {
+			t "anchor point found";
+			$anchor = $_;
+			last;
+		}
+	}
+	my @links;
+	if ($anchor) {
+		$elem = $anchor; 
+		while (($elem = $elem->right()) &&
+				((ref $elem) && ($elem->tag() ne "table"))) {
+			foreach ($elem->find_by_tag_name("_tag"=>"a")) {
+				# is this not begins with 'https?://' add prefix
+				push @links, ($_->attr(q(href)) =~ /^https?:\/\// ? "" : "http://www.$d") .  $_->attr(q(href));
+				t "link url added: " . $_->attr(q(href)) ;
+			}
+		}
+	}
+	push @links, $url;
+
+	if (defined $prog->{q(url)}) {
+		@{$prog->{q(url)}} = ( @links, @{$prog->{q(url)}} );
+	}
+	else {
+		push @{$prog->{q(url)}}, @links;
+	}
+
+	# LONG DESCRIPTION:
+	# new format uses the <div class="separator"><!-- ++++++++++ --></div> block
+	# to separate contents 
+	# anchor point: 
+	# long desc is in the 3. block; this is right sibling of the 3rd separator
+	# the actual content is inbetween the <span class="txt">....</span> elements
+	t "long desc parsing ...";
+	my @separators = $tree->look_down(_tag=>"div", class=>"separator");
+	return if ($#separators < 2);
+	@lines = ();
+	if (($anchor) = $separators[2]->right()) {
+		$joined = $anchor->tag();
+		if ($anchor->tag() eq "span" && $anchor->attr('class') eq "txt") {
+			push @lines, get_all_text($anchor);
+			
+			$joined = join(" ", @lines);
+			$joined =~ s/\xA0//;	# remove the to_text()'s results of &nbsp
+			$joined =~ s/^\s+//;	# remove blanks
+			t "found description $joined";
+			
+			if (length($joined)) {
+				delete($prog->{q(desc)});
+
+				# strip the desc at the specified command line option (if spec)
+				if (defined ($opt_max_desc_length) && 
+						($opt_max_desc_length < length($joined))) {
+					t "long desc was stripped, at: $opt_max_desc_length.";
+					$joined = substr($joined, 0, $opt_max_desc_length - 3) . "...";
+				}
+
+				$prog->{q(desc)} = [[ $joined, $COUNTRY ]]
+			}
+
+		}
+	}
+	
+
+	# SERIES NUMBER, CATEGORY, YEAR
+	# anchor point: 2nd separator
+	# all text data is in/under the parent TD element of the 2nd separator
+	# We collect all text data, and parse it from known datas. 
+
+	return if ($#separators < 1);
+	
+	($anchor) = $separators[1];
+	if ($anchor->parent()->tag() ne "td" || $anchor->parent->attr('width') ne "98%") {
+		t "credits section not found";
+		return;
+	}
+
+	# collect all text lines, we
+	# achive this to jump to the parent first, and walk all the childs until
+	# the anchor is reached
+	@lines = ();
+	foreach $elem ($anchor->parent()->content_list()) {
+		last if ((ref $elem) && ($elem == $anchor));
+		push @lines, get_all_text($elem);
+	}
+
+	# 0:{we are in credits secton}, 1:{duration,year section}
+	my $section = 0;
+	my $job = "foobar";
+	my $part = "";
+	my (%credits, $episode, $minutes, $year);
+	my $person = "";
+
+
+	foreach $line (@lines) {
+		$line =~ s/\xA0//; # remove to_text()'s results of &npsp
+		t	"processing line: '" . d $line . "'";
+
+		foreach $part (split /, */, $line) {
+
+			$part =~ s/^\s+//; # remove heading blanks
+			$part =~ s/\s+$//; # remove ending blanks
+			$part =~ s/^,*$//;
+
+			next unless length $part;
+			t "processing part: '$part'";
+
+			# we are in credits block if a known hungarian "job:" found
+			$section = 1 if (($section == 0) && 
+							(($_) = $part =~ m/\b(.+):/) && 
+							(defined($JOBMAP{$_})));
+
+			if ($section == 0) {
+				# duration, year, category
+				# possibilitys
+				# 1: amerikai filmdráma sorozat, 90 perc, 2000, 2. rész
+				# 12 éven aluliak számára ....
+
+				$_ = $part;
+				SWITCH: {
+					if ((m/\s*([0-9\/]+)\. $WORDS{$COUNTRY}->{episode}/) && (! defined $episode))
+						{ $episode = $1; last SWITCH;}
+					if ((m/\s*(\d+) $WORDS{$COUNTRY}->{minute}/) && (! defined $minutes))
+						{ $minutes = $1; last SWITCH;}
+					if ((m/\s*([12][0-9]{3})/) && (! defined $year))
+						{ $year = $1; last SWITCH;}
+					{ ; } # default -> category, was processed over 
+				}
+
+				t "found episode: '$episode'" if defined $episode;
+				t "found minutes: '$minutes'" if defined $minutes;
+				t "found year: '$year'"			 if defined $year;
+			} # section 0
+			if ($section == 1) {
+				# 
+				# is there a "hu-job:" string in the part? if yes, we should
+				# push the last readed person, and clear the person string.
+				# if a job is defined (hu-job) but not supported in the DTD
+				# we will add # the person(s) as:
+				# <actor> some_job: Foo Bar, Dummy Name, ...<actor>
+				# note: \b(.+): do not match to " író: ", because í is not
+				# part of \b
+
+				if (($_) = $part =~ /^\s*(\S+):/) {
+					# remove the "jobname:" string
+					$part =~ s/^\s*(\S+):\s*//;
+					t "is this a known job?: '$_'";		# e.g.: hu-job 
+					if (defined($JOBMAP{$_})) {
+						t "yes, this string is a jobname";
+						# this means, we should add our until now collected
+						# person to the credits, and begin to collect new 
+						# actors...
+
+						add_person($job, $person, \%credits);
+
+						if (length($JOBMAP{$_})) {
+							# newly readed part has a en-job (this is defined in DTD, so
+							# this will be the next used job for XML generation
+
+							t "job known in DTD as: $JOBMAP{$_}";
+							$job = $_;
+							$person = $part;
+						} #en-job
+						else {
+							# this job is not known in DTD, so only en-job, no hu-job;
+							# add as descriped above, set job to foobar to add as actor
+							$job = "foobar";
+							$person = "$_: $part ";
+						} #hu-job
+						next;
+					} #hu-job
+				} #: in the part
+
+				# we are here, if:
+				# -> $part holds ':' but it is no hu-job (no en-job)
+				# -> it have no :
+
+				if ($part =~ /^\(.*\)$/) {
+					t "found () expression, addint it to person string";
+					# if it has the from '(...)' the found HTML was:
+					# actor: Arnold Schweizenegger (as the Terminator)
+					# add this to persons and do not push, it. 
+					$person .= " $part";
+				}
+				else {
+					# this is a new name, check how looks person, if it ends
+					# with ":" do not add this to credits, only append, because in the
+					# previuos iteration only hu-job was found.
+					if ($person =~ /:\s*$/) {
+						$person .= " $part";
+					}
+					else {
+						add_person($job, $person, \%credits);
+						$person = $part;
+					}
+				}
+			} #section 1
+		} #loop over parts
+	} #loop over $lines
+
+	# add the last processed data to credits...
+	add_person($job, $person, \%credits) if length($person);
+
+	t "CREDITS: " . d \%credits;
+
+	#$prog->{q(category)} = [[ $category, $COUNTRY ]]
+		#if defined $category and length $category;
+
+	$prog->{q(length)} = $minutes * 60
+		if defined $minutes;
+
+	$prog->{q(date)} = $year
+		if defined $year ;
+
+	if(defined($episode)) {
+		if($episode =~ m#(\d+)/(\d+)#) {
+			# episode-num spec with the total number specified.
+			# however XMLTV counts from 0 on ...
+			$prog->{q(episode-num)} = [[ sprintf('%d/%d', $1 - 1, $2), "xmltv_ns" ]];
+		}
+		else {
+			$prog->{q(episode-num)} = [[ $episode, "onscreen" ]];
+		}
+	}
+
+	$prog->{q(credits)} = \%credits;
+	$tree->delete;
+}
+
+
+#-------------------------------------------------------------------------------
+# grab_icon
+#-------------------------------------------------------------------------------
+# desc		: fetch (if needed and specified) channel icons, returns pointing URL
+# arguments	: 1- channel id (eg 003)
+# returns	: url pointing to tha program's logo (icon) http:|file:...
+#-------------------------------------------------------------------------------
+sub grab_icon( $ ) {
+	# if icon not requested
+	return unless ($opt_icons || $opt_local_icons);
+
+	my $channelid = shift;
+	my $fetchurl	= "http://www." . domain() . "/tv/kep_ado/al_".(int(${channelid}) % 10000).".gif";
+	my ($file, $iconurl);
+
+	return $fetchurl if ($opt_icons && ! $opt_local_icons);
+
+	# create directory
+	mkdir $opt_local_icons unless (-d $opt_local_icons);
+
+	# remove multiple /;	make absoluth path 
+	$_ = "${opt_local_icons}/${channelid}.gif";
+	s!//!/!g;
+	$file = Cwd::abs_path( $_ );
+
+	$iconurl	 = "file://${file}";
+
+	return $iconurl	if ($opt_local_icons && $opt_no_fetch_icons);
+
+	if (! -d $opt_local_icons) {
+		warn "directory not exists, and cannot create: $opt_local_icons; " .
+				"icon will be not grabbed";
+		return $fetchurl;
+	}
+
+	if (open(FILE,">$file")) {
+		t "fetching $fetchurl...";
+		$XMLTV::Get_nice::FailOnError = 0;
+		if (my $image = get_nice($fetchurl)) {
+			t "icon for $channelid grabbed successfully";
+			print FILE $image;
+			close FILE;
+			# success
+			return $iconurl;
+		}
+		else {
+			warn "Could not download channel-logo for channel $channelid, using remote URL instead. " .
+				"Error message: " . error_msg($fetchurl) . ".";
+			close FILE;
+			unlink $file;
+			return $fetchurl;
+		}
+	}
+	else {
+		warn "cannot create icon file ($file) for channel $channelid, using remote URL instead";
+		close FILE;
+		unlink $file;
+		return $fetchurl;
+	}
+	return;
+}
+
+
+#-------------------------------------------------------------------------------
+# get_channel_urls
+#-------------------------------------------------------------------------------
+# desc		: grab a channel page fetch (if needed and specified) channel icons, returns pointing URL
+# arguments	: 1- channel id (eg 003) (grab a webpage parse data form there)
+# 			  OR
+# 			  2-  reference to a HTML tree's (root) object (searching in it)
+# returns	: array of urls pointing to tha channel's pages/emails
+#-------------------------------------------------------------------------------
+sub get_channel_urls( $ ) {
+	my $ch_did = shift;
+	my @result = ();
+    my $chdata;
+
+	# two sprintf parameters: first: channel_id,, second how many days grabbed
+	my $churlfmt = "http://www." . domain() .
+		"/pls/tv/tv.channel?i_ch=%d&" .
+		"i_days=1&i_xday=%d&i_where=1";
+
+    # url to grab now (4 days - this is the minimum)
+	my $churl = sprintf($churlfmt, $ch_did, 4);
+
+    # url to add as the information source (4 days - this is the minimum)
+	my $portchurl = sprintf($churlfmt, $ch_did, 4);
+
+	t "fetching page for channel urls: $churl\n";
+	worker("base-downloading");
+
+	t "fetching $churl...";
+	$XMLTV::Get_nice::FailOnError = 0;
+
+	if (! defined($chdata = get_nice($churl))) {
+		worker("base-parsing");
+		warn "Could not get URL: $churl, the information urls for the channel $ch_did will be not available. " .
+			"Error message: " . error_msg($churl) . ".";
+		push @result, $portchurl;
+		return @result;
+	}
+
+	my $tree = HTML::TreeBuilder->new_from_content($chdata) or
+		die "could not fetch/parse $churl (channel infopage)";
+	worker("base-parsing");
+
+	my ($anchor, $elem);
+	# we have to way to find the channel URLs: 
+	# -> find the channel image (this is in the same TABLE element as the
+	#		requested A elements, and if this is not found:
+	# -> try to find a HR element (only one is presented on the page), this
+	#		Nth left sibling is the searched TABLE.
+	if (($anchor) = $tree->look_down( _tag => "b", sub { lc($_[0]->as_text()) =~ /web:/ } ) ) {
+		if ($anchor = ($anchor->look_up("_tag"=>"p")->look_down("_tag"=>"a"))) {
+			push @result, $anchor->attr(q(href));
+		} else {
+			t "channel url not found";
+		}
+	} else {
+		t "channel url not found";
+	}
+	# add PORT url, too, this should be the last (and open 3 days if clicked)
+	push @result, $portchurl if defined $portchurl;
+	return @result;
+}
+
+
+#-------------------------------------------------------------------------------
+# load_configs
+#-------------------------------------------------------------------------------
+# desc		: load the tv_grab_huro.conf, jobmap, catmap.$COUNTRY files, and
+#			  sets the globals: %CATMAP, %JOBMAP
+# arguments	: none
+# returns	: array of port channel ids: ( 001, 005 )
+#-------------------------------------------------------------------------------
+sub load_configs() {
+	my @config_lines = XMLTV::Config_file::read_lines($CONFIG_FILE);
+	my $line_num = 0;
+	my (@portids, $where, @fields);
+
+	foreach (@config_lines) {
+		++ $line_num;
+		next if not defined;
+		$where = "$CONFIG_FILE:$line_num";
+		if (/^country:?\s+(\w\w)$/) {
+			warn "$where: already seen country\n" if defined $COUNTRY;
+			$COUNTRY = $1;
+
+		}
+		elsif (/^channel:?\s+(\S+)\s+([^\#]+)/) {
+			my $ch_did = $1;
+			my $ch_name = $2;
+			$ch_name =~ s/\s*$//;
+			push @portids, $ch_did;
+			# FIXME do not store display-name in the config file - it is
+			# ignored here.
+		}
+		else {
+			warn "$CONFIG_FILE:$.: bad line\n";
+		}
+	}
+
+	for ($COUNTRY) {
+		if (not defined) {
+				$_ = 'hu';
+				warn "country not seen in $CONFIG_FILE, assuming '$_'\n";
+		}
+	}
+	# Lame reverse lookup on %COUNTRIES.
+	foreach (values %COUNTRIES) {
+		if ($_->[0] eq $COUNTRY) {
+			$TZ = $_->[1];
+			last;
+		}
+	}
+	die "$where: unknown country $COUNTRY\n" if not defined $TZ;
+
+	# jobmap file
+	# (this is a file, where we store translations of job names from 
+	#	Hungarian or Romanian language to English.	However we leave some
+	#	translations blank, namely these that have no field in the credits
+	#	structure)
+	#
+	# Read the file with channel mappings.
+	my $jobmap_file = "jobmap";
+	my $jobmap_str = GetSupplement( 'tv_grab_huro', $jobmap_file );
+
+	$line_num = 0;
+	foreach (split( /\n/, $jobmap_str )) {
+		++ $line_num;
+		tr/\r//d;
+		
+		s/#.*//;
+		next if m/^\s*$/;
+
+		$where = "$jobmap_file:$line_num";
+		@fields = split m/:/;
+		die "$where: wrong number of fields"
+			if @fields > 2;
+
+		my ($huro_job, $credits_id) = @fields;
+		$JOBMAP{$huro_job} = defined($credits_id) ? $credits_id : "";
+	}
+
+	# read the file with category mappings.
+	# cat_en:cat_hu:regexp
+	my $catmap_file = "catmap.$COUNTRY";
+	my $catmap_str="";	
+
+    $catmap_str = GetSupplement( 'tv_grab_huro', $catmap_file );
+
+
+	$line_num = 0;
+	foreach (split( /\n/, $catmap_str )) {
+		++ $line_num;
+		tr/\r//d;
+		s/#.*//;
+		next if m/^\s*$/;
+
+		$where = "$catmap_file:$line_num";
+		@fields = split m/:/;
+		die "$where: wrong number of fields"
+			if @fields > 3;
+
+		my ($cat_en, $cat_hu, $cat_reg) = @fields;
+		$CATMAP{$cat_en} = defined($cat_reg) ? [$cat_reg, $cat_hu] : [$cat_hu, $cat_hu];
+	}
+
+	return @portids;
+}
+
+
+#-------------------------------------------------------------------------------
+# worker
+#-------------------------------------------------------------------------------
+# desc		: measure how many seconds will be executed some port of this program
+# arguments	: 1- name of the worker part of this program, currently:
+# 			     xml-writing, base-downloading, slow-downloading
+# 			     base-parsing, slow-parsing
+# returns	: none
+#-------------------------------------------------------------------------------
+sub worker( $ ) {
+	my $now = time();
+	my $newworker = shift;
+
+	if (! defined $WNAME) {
+		$WNAME = $newworker;
+		$WTIMES{$WNAME} = 0;
+		$WSTIME = $now;
+		return;
+	}
+
+	$WTIMES{$WNAME} += $now - $WSTIME;
+	$WSTIME = $now;
+	$WNAME = $newworker;
+}
+
+
+#-------------------------------------------------------------------------------
+# showworkers
+#-------------------------------------------------------------------------------
+# desc		: prints $WTIMES to the stdout
+# arguments	: none
+# returns	: none
+#-------------------------------------------------------------------------------
+sub showworkers() {
+	return if $opt_quiet;
+	return if not $opt_worker_times;
+
+	my $total = 0;
+	$total += $_ foreach values %WTIMES;
+	$total = 1 unless $total ; # division by zero
+	printf STDERR ("%-20s: %3d:%02dm %3d%%\n",
+		$_,
+		$WTIMES{$_} / 60, $WTIMES{$_} % 60,
+		100 * $WTIMES{$_} / $total)
+			foreach keys %WTIMES;
+	printf STDERR ("%-20s: %3d:%02dm\n",
+		"total", $total / 60, $total % 60);
+}
+
+#-------------------------------------------------------------------------------
+# arabic
+#-------------------------------------------------------------------------------
+# desc		: This example uses Robin Houston's entry in the Perl
+#               : Institute's Roman Numeral Challenge to convert Roman numerals
+#               : to Arabic. http://www.perl.org/wits.html
+#               : (we could just use Roman, but don't want to add the dependency)
+# arguments	: roman number
+# returns	: integer
+#-------------------------------------------------------------------------------
+sub arabic( $ ) {
+	my ($n, $d);
+	($n, $d, $_) = (1, 2, @_);
+	$_ = uc $_ if !/[^a-z]/;
+	for my $v(split//, 'IVXLCDM') {
+		s/\+.*$v/)/;
+		s/$v([^$v+-])/-$n$1/g;
+		s/$v/+$n/g;
+		$n *= $d ^= 7
+	}
+	/[^-+\d]/ ? () : eval
+}
+
+#-------------------------------------------------------------------------------
+# M A I N
+#-------------------------------------------------------------------------------
+
+
+# Whether zero-length programmes should be included in the output.
+my $WRITE_ZERO_LENGTH = 0;
+
+# Get options, including undocumented --cache option.
+XMLTV::Memoize::check_argv('XMLTV::Get_nice::get_nice_aux');
+
+
+$opt_slow = 0;
+$opt_full_desc = 0;
+$opt_days = 8; # default
+$opt_offset = 0; # default
+$opt_quiet = 0; # default
+
+GetOptions(	'days=i'		=> \$opt_days,
+			'offset=i'		=> \$opt_offset,
+			'help'			=> \$opt_help,
+			'configure'		=> \$opt_configure,
+			'gui:s'			=> \$opt_gui,
+			'config-file=s' => \$opt_config_file,
+			'output=s'		=> \$opt_output,
+			'quiet'			=> \$opt_quiet,
+			'slow'			=> \$opt_slow,
+			'list-channels' => \$opt_list_channels,
+			'icons'			=> \$opt_icons,
+			'local-icons=s' => \$opt_local_icons,
+			'no-fetch-icons'=> \$opt_no_fetch_icons,
+			'loc=s'			=> \$opt_loc,
+			'now=s'		  => \$opt_now,
+			'worker-times'  => \$opt_worker_times,
+			'get-full-description' => \$opt_full_desc,
+			'max-desc-length=i' => \$opt_max_desc_length
+		) or usage(0);
+
+die 'number of days must not be negative'
+	if (defined $opt_days && $opt_days < 0);
+
+usage(1) if $opt_help;
+
+my $mode = XMLTV::Mode::mode('grab', # default
+				$opt_configure => 'configure',
+				$opt_list_channels => 'list-channels');
+
+XMLTV::Ask::init($opt_gui);
+
+# File that stores which channels to download.
+$CONFIG_FILE = XMLTV::Config_file::filename($opt_config_file,
+					'tv_grab_huro', $opt_quiet, 'tv_grab_hu');
+
+#-------------------------------------------------------------------------------
+# only configuration
+#-------------------------------------------------------------------------------
+
+
+if ($mode eq 'configure') {
+	worker("base-parsing");
+	XMLTV::Config_file::check_no_overwrite($CONFIG_FILE);
+	open(CONF, ">$CONFIG_FILE") or die "cannot write to $CONFIG_FILE: $!";
+
+	my $default_cn = 'Hungary';
+	my $cn = ask_choice('Grab listings for which country?',
+				$default_cn, sort keys %COUNTRIES);
+	$COUNTRY = $COUNTRIES{$cn}[0];
+	print CONF "country $COUNTRY\t# $cn\n";
+
+	# Ask about each channel.
+	get_channels();	# sets %CHANNELS
+	my @portids = sort keys %CHANNELS;
+	my @names = map { $CHANNELS{$_}->{qw(display-name)}->[0][0] } @portids;
+	my @qs = map { "add channel $_?" } @names;
+	my @want = ask_many_boolean(1, @qs);
+	foreach (@portids) {
+		my $w = shift @want;
+		warn("cannot read input, stopping channel questions"), last
+			if not defined $w;
+		# No need to print to user - XMLTV::Ask is verbose enough.
+
+		# Print a config line, but comment it out if channel not wanted.
+		print CONF '#' if not $w;
+		my $name = shift @names;
+		print CONF "channel $_ $name\n";
+		# TODO don't store display-name in config file.
+	}
+
+	close CONF or warn "cannot close $CONFIG_FILE: $!";
+	say("Finished configuration.");
+	worker("base-parsing");
+	showworkers();
+	exit();
+}
+
+# Options to be used for XMLTV::Writer.
+my %w_args;
+if (defined $opt_output) {
+	my $fh = new IO::File(">$opt_output");
+	die "cannot write to $opt_output: $!" if not defined $fh;
+	$w_args{OUTPUT} = $fh;
+}
+$w_args{encoding} = 'ISO-8859-2';
+
+#-------------------------------------------------------------------------------
+# only channel listing
+#-------------------------------------------------------------------------------
+
+if ($mode eq 'list-channels') {
+	# Write channels mode.
+	worker("base-parsing");
+	if (not defined $opt_loc) {
+		my $msg = "--loc option required with --list-channels:\n";
+		foreach (sort keys %COUNTRIES) {
+			$msg .= "		--loc $COUNTRIES{$_}[0] for $_\n";
+		}
+		die $msg;
+	}
+	$COUNTRY=$opt_loc;
+	worker("xml-writing");
+	my $writer = new XMLTV::Writer(%w_args);
+	$writer->start(xhead());
+	worker("base-parsing");
+	get_channels(); # sets %CHANNELS
+	# sort channels based on their portid
+	my @portids = sort keys %CHANNELS;
+	worker("xml-writing");
+	$writer->write_channel($CHANNELS{$_}) foreach @portids;
+	$writer->end();
+	worker("base-parsing");
+	showworkers();
+	exit();
+}
+
+#-------------------------------------------------------------------------------
+# only grabbing
+#-------------------------------------------------------------------------------
+
+if ($mode eq 'grab') {
+
+	worker("base-parsing");
+
+	my $ch_did;
+	my $bar;
+	my @portids = load_configs();
+
+	# sets %CHANNELS
+	get_channels();
+
+	worker("xml-writing");
+	my $writer = new XMLTV::Writer(%w_args);
+	worker("base-parsing");
+
+	# we have to fetch @portids icons, and @portids pages for channel URL
+	# (e.g.: www.hbo.hu)
+
+	$bar = new XMLTV::ProgressBar('getting channel details ', 2 * @portids)
+		if not $opt_quiet;
+
+	worker("xml-writing");
+	$writer->start(xhead());
+	worker("base-parsing");
+
+	# Write channel elements
+	foreach $ch_did (@portids) {
+		if (! $CHANNELS{$ch_did}) {
+			warn "\nWARNING: Channel with port-id $ch_did no more exists on the site, skipping it's channel description grabbing!";
+			next;
+		}
+		my %channel = %{$CHANNELS{$ch_did}};
+		worker("base-downloading");
+		# fetch and get icon url
+		if (my $iconurl = grab_icon( $ch_did )) {
+			$channel{'icon'} = [ { src => $iconurl } ];
+		}
+		update $bar if not $opt_quiet;
+		worker("base-parsing");
+
+		if (my @churls = get_channel_urls( $ch_did )) {
+			$channel{'url'} = \@churls;
+		}
+		update $bar if not $opt_quiet;
+	
+		worker("xml-writing");
+		$writer->write_channel(\%channel);
+		worker("base-parsing");
+	}
+	$bar->finish() if not $opt_quiet;
+
+	# The grabber's source allows requests of more than one day per page. This can
+	# be done by specifying the i_xday argument with the GET request.
+	#
+	# To not load their server too much (requesting e.g. 14 channels in one shot
+	# should 'cause quite some traffic to the SQL server) I think we shouldn't 
+	# query for more then 5 channels per page. With the default of requesting data
+	# for 8 days this leads to 2 requests per channel and grab ...
+
+	$DAYSPERPAGE = int($opt_days / 5) + (($opt_days % 5) ? 1 : 0);
+	$DAYSPERPAGE = int($opt_days / $DAYSPERPAGE);
+	
+	# We have to request at minimum of four days
+	$DAYSPERPAGE = 4 if ($DAYSPERPAGE<4);
+
+	t "requesting $DAYSPERPAGE days per scraped webpage ..."; 
+
+	# port.hu|ro provide the today's program based on the localtime on
+	# Hungary. So in other lands e.g. Australia (thx Zsolt Bayer) (TZ: EST/AEST) if
+	# there is f.e. friday 22:38 here in Hungary it is saturday 04:38
+	# so Zsolt will get the programs not for the requested day (the XML will be
+	# correct, just the wrong day is in)
+	#
+	# we cannot use Date::Manip's Date_ConvTZ, because it does not detects
+	# correctly f.e. the Australia/Melbourne zone. (because it uses `date +%Z`
+	# to get the zone, and date will output EST and not AEST :-().
+	# [we could not use f.e. `date +%z`, becuase what happen on windows?]
+	#
+	# that means: we will here not set the global FETCHOFFSET to fetch
+	# the "today's" program from everywhere on the world, but we will grab
+	# at first 3 pages (0, -1, +1) to find the correct offset.
+
+	my $now = parse_date("now");
+
+	# developer's options --now: what time is it? (measured in local time)
+	$now = parse_date( $opt_now ) if ($opt_now);
+
+	t "now=$now";
+
+	my $startat = DateCalc($now, "$opt_offset days");
+	my $startatdate = UnixDate($startat, '%Q');
+
+	t "start grabbing from (offset added, localtime): $startatdate";
+
+	# make list: which date is which day on the website, we will make grabbing
+	# requests based on the @days array
+
+	my @days;
+
+	for (my $i = 1 + $opt_offset; 
+			$i < 1 + $opt_offset + $opt_days;
+			$i += $DAYSPERPAGE) {
+		push @days, [ $startatdate, $i ];
+	
+		# calculate the next date: bump a YYYYMMDD date by $DAYSPERPAGE day
+		$startatdate = UnixDate(DateCalc(parse_date($startatdate), "+ $DAYSPERPAGE days"), '%Q');
+
+		die "Could not calculate next grabbing date $days[$#days][0] (+$DAYSPERPAGE days)"
+			if not defined $startatdate;
+	}
+	
+	# This progress bar is for both downloading and parsing.	Maybe
+	# they could be separate stages.
+
+	$bar = new XMLTV::ProgressBar('getting program listings', @days * @portids)
+		if not $opt_quiet;
+
+	foreach my $date_n_day (@days) {
+		my ($idate, $iday) = @$date_n_day;
+		my $some_success = 0;
+		foreach $ch_did (@portids) {
+			if (! $CHANNELS{$ch_did}) {
+				warn "\nWARNING: Channel with port-id $ch_did no more exists on the site, skipping it's program grabbing!";
+				next;
+			}
+			my @ps = process_table($idate, xid($ch_did), $ch_did, $iday);
+			$some_success = 1 if @ps;
+			worker("xml-writing");
+			$writer->write_programme($_) foreach @ps;
+			worker("base-parsing");
+			update $bar if not $opt_quiet;
+		}
+		if (@portids and not $some_success) {
+			warn "failed to get any listings for day $iday, stopping\n";
+			last;
+		}
+	}
+	$bar->finish() if not $opt_quiet;
+	worker("xml-writing");
+	$writer->end();
+	worker("base-parsing");
+	showworkers();
+	exit(0);
+}
+
+die;
